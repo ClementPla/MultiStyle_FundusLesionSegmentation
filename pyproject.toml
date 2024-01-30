@@ -1,0 +1,51 @@
+[project]
+name = "AdaptiveFundusSegmentation"
+version = "0.1.0"
+description = "Adaptive-style for lesions segmentation in fundus"
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "pandas",
+    "pydantic",
+    "scikit-learn",
+    "torch",
+    "torch-geometric",
+    "lightning",
+    "torchmetrics",
+    "tensorboard",
+    "nntools @ git+https://github.com/ClementPla/NNTools@attrs_dataset",
+    "wandb",
+    "attrs",
+    "albumentations"
+]
+readme = "README.md"
+
+[project.scripts]
+train = "fundseg.scripts.train:main"
+train_linearprobe = "adptSeg.scripts.linear_probing:main"
+test_aptos_conversion = "adptSeg.scripts.conversion_test:test_aptos_conversion"
+test_conversion_vs_specialized = "adptSeg.scripts.conversion_test:test_conversion_vs_specialized"
+test_ddr_model_trained_on_idrid_retles = "adptSeg.scripts.conversion_test:test_ddr_model_trained_on_idrid_retles"
+
+[project.optional-dependencies]
+dev = ["black", "ruff", "pytest", "pytest-cov", "pre-commit"]
+
+
+notebook = ["ipykernel", "matplotlib"]
+all = ["drgnet[dev, notebook]"]
+
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 120
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "I", "RUF", "TCH"]
+fixable = ["I", "RUF100", "TCH"]
+fix = true
+
+[tool.ruff.isort]
+known-first-party = ["drgnet"]

@@ -1,0 +1,27 @@
+# root_path: /usagers/clpla/data/segmentation/
+root_path: /home/tmp/clpla/data/segmentation/
+
+train:
+  img_idrid_url: idrid/A. Segmentation/1. Original Images/a. Training Set/
+  mask_idrid_url: idrid/A. Segmentation/2. All Segmentation Groundtruths/a. Training Set/
+  img_messidor_url: messidor/original/img/images/
+  mask_messidor_url: messidor/biomarkers/
+  img_fgadr_url: FGADR/Seg-set/Original_Images/
+  mask_fgadr_url: FGADR/Seg-set/
+  img_retles_url: retinal-lesions-v20191227/images_896x896/
+  mask_retles_url: retinal-lesions-v20191227/segmentation/
+  img_ddr_url: DDR-dataset/lesion_segmentation/train/image/
+  mask_ddr_url: DDR-dataset/lesion_segmentation/train/label/
+
+test:
+  img_idrid_url: idrid/A. Segmentation/1. Original Images/b. Testing Set/
+  mask_idrid_url: idrid/A. Segmentation/2. All Segmentation Groundtruths/b. Testing Set/
+  img_retles_url: retinal-lesions-v20191227/images_896x896/
+  mask_retles_url: retinal-lesions-v20191227/segmentation/
+  img_ddr_url: DDR-dataset/lesion_segmentation/test/image/
+  mask_ddr_url: DDR-dataset/lesion_segmentation/test/label/
+  img_messidor_url: messidor/original/img/images/
+  mask_messidor_url: messidor/biomarkers/
+  img_fgadr_url: FGADR/Seg-set/Original_Images/
+  mask_fgadr_url: FGADR/Seg-set/
+
