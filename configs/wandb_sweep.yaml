@@ -1,0 +1,27 @@
+name: FundusLesions-Sweep-AllDatasets
+project: Retinal Lesions Segmentation
+program: train.py
+metric:
+  name: val_mIoU
+  goal: maximize
+method: bayes
+parameters:
+  model:
+    values: [unet_se_resnet50]
+  lr:
+    min: 0.00001
+    max: 0.05
+  data_aug_ops:
+    values: [light, medium, heavy]
+  optimizer:
+    values: [adam, adamw, sgd]
+  log_dice:
+    values: [True, False]
+  dice_smooth:
+    min: 0.0
+    max: 0.5
+
+command:
+  - python
+  - ${program}
+  - ${args}
