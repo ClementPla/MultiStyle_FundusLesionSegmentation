@@ -3,6 +3,8 @@ checkpoints_probing/
 wandb/
 test/ 
 
+.vscode/
+
 figures/**/*.png
 
 # Byte-compiled / optimized / DLL files
