@@ -23,7 +23,7 @@ def process_masks_multiclass(Exudates=None, Microaneurysms=None, Hemorrhages=Non
 
 @D.nntools_wrapper
 def autocrop(image, mask=None):
-    threshold = 40
+    threshold = 25
     r_img = np.max(image, axis=2)
     _, roi = cv2.threshold(r_img, threshold, 1, cv2.THRESH_BINARY)
     not_null_pixels = cv2.findNonZero(roi)

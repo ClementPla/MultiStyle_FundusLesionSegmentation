@@ -3,7 +3,14 @@
 logger:
   project: Retinal Lesions Segmentation
 
-model:
+
+datasets:
+  IDRID: /home/tmp/clpla/data/segmentation/idrid/A. Segmentation/
+  FGADR: /home/tmp/clpla/data/segmentation/FGADR/Seg-set/
+  MESSIDOR: /home/tmp/clpla/data/segmentation/Maples-DR/
+  DDR: /home/tmp/clpla/data/segmentation/DDR-dataset/lesion_segmentation/
+  RETLES: /home/tmp/clpla/data/segmentation/retinal-lesions-v20191227/
+
 
 data:
   img_size: *img_shape
@@ -13,8 +20,7 @@ data:
   ^eval_batch_size: 1
   use_cache: True
   ^persistent_workers: True
-  crop_size: [512, 512]
-  weightedSampler: False
+  random_crop: [512, 512]
 
 trainer:
   accumulate_grad_batches: 1

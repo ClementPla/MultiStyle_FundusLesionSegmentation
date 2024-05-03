@@ -22,51 +22,6 @@ seed_everything(1234, workers=True)
 
 torch.set_float32_matmul_precision('high')
 
-def run_test(model, datamodule, config):
-    tags = datamodule.datasets.name
-    if not isinstance(tags, list):
-        tags = [tags]
-
-    run_id, run_name = check_if_run_already_started(
-        config["logger"]["project"],
-        model.model_name,
-        failed_state=True,
-        return_runname=True,
-    )
-
-    datamodule.setup("test")
-    config["logger"]["id"] = run_id
-    wandb_logger = init_logger(
-        config["logger"],
-        tags=tags,
-        **config.tracked_params,
-        model_name=model.model_name,
-        train_dataset=tags,
-    )
-    callbacks = get_callbacks(
-        config,
-        classes=ALL_CLASSES,
-        wandb_logger=wandb_logger,
-    )
-
-    trainer = Trainer(
-        **config["trainer"],
-        logger=wandb_logger,
-        # strategy="ddp_find_unused_parameters_false",
-        strategy="ddp_spawn",
-        callbacks=callbacks,
-    )
-    ckpt_path = os.path.join("checkpoints", run_name)
-    list_ckpts = os.listdir(ckpt_path)
-    list_ckpts = [_ for _ in list_ckpts if _ != "last.ckpt"]
-    ckpt_path = os.path.join(ckpt_path, list_ckpts[-1])
-    test_dataloaders = datamodule.test_dataloader()
-    for dataloader in test_dataloaders:
-        model.dataset_name = dataloader.dataset.id.name
-        trainer.test(model=model, dataloaders=dataloader, ckpt_path=ckpt_path)
-    wandb_logger.experiment.finish()
-    wandb.finish()
-
 
 def run_train_test(model, datamodule, config):
     tags = datamodule.datasets.name
