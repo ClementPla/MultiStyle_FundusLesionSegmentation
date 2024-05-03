@@ -14,6 +14,7 @@ dependencies = [
     "torchmetrics",
     "tensorboard",
     "nntools @ git+https://github.com/ClementPla/NNTools@attrs_dataset",
+    "fundus-data-toolkit @ git+https://github.com/ClementPla/fundus-data-toolkit",
     "wandb",
     "attrs",
     "albumentations"
@@ -29,7 +30,6 @@ test_ddr_model_trained_on_idrid_retles = "adptSeg.scripts.conversion_test:test_d
 
 [project.optional-dependencies]
 dev = ["black", "ruff", "pytest", "pytest-cov", "pre-commit"]
-
 
 notebook = ["ipykernel", "matplotlib"]
 all = ["drgnet[dev, notebook]"]

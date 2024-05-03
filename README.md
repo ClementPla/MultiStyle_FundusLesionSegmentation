@@ -34,7 +34,7 @@ For an easier use of the models, we refer to cleaned-up version of the code prov
 
 ## Style conversion
 
-Modifying an image by adversarial attacks to move from IDRiD to RETINAL LESIONS style.
+Modifying an image by adversarial attacks to move from RETINAL LESIONS to IDRiD style.
 <p align="center">
     <img src="imgs/soft_adversarial.gif" width="800px"/>
 </p>
