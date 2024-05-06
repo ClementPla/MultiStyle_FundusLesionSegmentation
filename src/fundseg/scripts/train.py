@@ -1,17 +1,12 @@
 import argparse
 import logging
-import os
 
 import torch
-from fundseg.data.datamodule import (
-    ALL_CLASSES,
-    ALL_DATASETS,
-    FundusSegmentationDatamodule,
-)
-from fundseg.data.utils import Dataset, get_dataset_from_name
+from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
+from fundseg.data.utils import ALL_CLASSES
 from fundseg.models import get_model
 from fundseg.utils.callbacks import get_callbacks
-from fundseg.utils.logger import check_if_run_already_started, init_logger
+from fundseg.utils.logger import get_wandb_logger
 from nntools.utils import Config
 from pytorch_lightning import Trainer, seed_everything
 
@@ -20,23 +15,27 @@ import wandb
 logging.basicConfig(level=logging.WARNING)
 seed_everything(1234, workers=True)
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision("high")
 
 
-def run_train_test(model, datamodule, config):
-    tags = datamodule.datasets.name
-    if not isinstance(tags, list):
-        tags = [tags]
-    
-    # tags += ['Finetuned from ALL']
-    wandb_logger = init_logger(
-        config["logger"],
+def run_train_test(architecture, config, train_datasets):
+    project_name = config["logger"]["project"]
+    config["model"]["archicture"] = architecture
+    if not isinstance(train_datasets, list):
+        train_datasets = [train_datasets]
+
+    tags = train_datasets
+
+    datamodule = get_datamodule_from_config(config['datasets'], train_datasets, config["data"])
+    test_dataset_id = [d.id for d in datamodule.test]
+    model = get_model(architecture, **config["model"], test_dataset_id=test_dataset_id)
+
+    wandb_logger = get_wandb_logger(
+        project_name=project_name,
+        tracked_params=config.tracked_params,
         tags=tags,
-        **config.tracked_params,
-        model_name=model.model_name,
-        train_dataset=tags,
+        item_check_if_run_exists=("model/architecture", architecture),
     )
-
     callbacks = get_callbacks(
         config,
         classes=ALL_CLASSES,
@@ -51,14 +50,10 @@ def run_train_test(model, datamodule, config):
     )
 
     trainer.fit(model, datamodule=datamodule)
-    datamodule.setup("test")
+    trainer.test(model, datamodule=datamodule)
 
-    test_dataloaders = datamodule.test_dataloader()
-    for dataloader in test_dataloaders:
-        model.dataset_name = dataloader.dataset.id.name
-        trainer.test(model=model, dataloaders=dataloader, ckpt_path="best")
-    wandb_logger.experiment.finish()
     wandb.finish()
+
 
 def main():
     parser = argparse.ArgumentParser(prog="Segmentation Lesions in Fundus")
@@ -68,40 +63,27 @@ def main():
     parser.add_argument("--optimizer", type=str, help="Optimizer")
     parser.add_argument("--log_dice", type=bool, help="Use the log of dice loss")
     parser.add_argument("--dice_smooth", type=float, help="Smoothness constant for dice loss")
-    parser.add_argument("--dataset", type=str, help="Train dataset")
+    parser.add_argument("--dataset", type=str, help="Train dataset", nargs="+")
 
     args = parser.parse_args()
-    
-    # if args.dataset == 'all':
-    #     datasets = ALL_DATASETS
-    # else:
-    #     datasets = get_dataset_from_name(args.dataset)
-    datasets = Dataset.IDRID | Dataset.RETINAL_LESIONS
+
+    datasets = args.dataset
+    if datasets == "all":
+        datasets = ALL_DATASETS
     config_file = "configs/config.yaml"
     config = Config(config_file)
-    config_data = Config("configs/data_config.yaml")
-    
+
     config["data"]["data_aug_ops"] = args.data_aug_ops
-    config['model'] = {}
+    config["model"] = {}
     config["model"]["lr"] = float(args.lr)
     config["model"]["optimizer"] = args.optimizer
-    config['model']['smooth_dice'] = args.dice_smooth
-    config['model']['log_dice'] = args.log_dice
-    
+    config["model"]["smooth_dice"] = args.dice_smooth
+    config["model"]["log_dice"] = args.log_dice
+
     model_name = args.model
-    fundus_datamodule = FundusSegmentationDatamodule(
-        datasets=datasets, data_config=config_data, **config["data"]
-    )
 
-    fundus_datamodule.setup("fit")
+    run_train_test(model_name, config, datasets)
 
-    
-    fundus_datamodule.setup("test")
-    
-    model = get_model(model_name, **config["model"])
-    
-    run_train_test(model, fundus_datamodule, config)
 
-    
 if __name__ == "__main__":
     main()

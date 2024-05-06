@@ -1,8 +1,9 @@
 from abc import abstractmethod
-from typing import Any
+from typing import Any, List, Optional
 
 import segmentation_models_pytorch.base.initialization as smp_init
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
 from kornia.morphology import gradient
@@ -17,7 +18,9 @@ from fundseg.models.utils.metric import AUCPrecisionRecallCurve
 
 class BaseModel(LightningModule):
     def __init__(
-        self, n_classes=5, classes=ALL_CLASSES, lr=0.001, log_dice=False, smooth_dice=0.225, *args: Any, **kwargs: Any
+        self, n_classes=5, classes=ALL_CLASSES, lr=0.001, log_dice=False, smooth_dice=0.225, 
+        test_dataset_id:Optional[List[str]]=None,
+        *args: Any, **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
         self.task = "multiclass"
@@ -44,7 +47,11 @@ class BaseModel(LightningModule):
             }
         )
 
-        self.test_metrics = torchmetrics.MetricCollection(
+        self.test_dataloader_ids = test_dataset_id
+        test_metrics = []
+        
+        for test_id in test_dataset_id:
+            test_metrics.append(torchmetrics.MetricCollection(
             {
                 "AUC Precision Recall": AUCPrecisionRecallCurve(
                     task=self.task,
@@ -59,9 +66,12 @@ class BaseModel(LightningModule):
                     num_classes=self.n_classes,
                     average="macro",
                 ),
-            }
-        )
+            },
+            postfix=f"_test_{test_id}"
+        ))
+        self.test_metrics = nn.ModuleList(test_metrics)
 
+        self._current_dataloader_idx = 0
         self.save_hyperparameters()
 
     def initialize(self):
@@ -121,7 +131,6 @@ class BaseModel(LightningModule):
         self.eval()
         batch = self.transfer_batch_to_device(batch, self.device, 0)
         x = batch["image"]
-
         roi = batch["roi"].unsqueeze(1)
         logits = self(x)
         output = self.get_prob(logits, roi)
@@ -135,19 +144,19 @@ class BaseModel(LightningModule):
     def on_test_start(self) -> None:
         self.test_metrics.reset()
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
         x = batch["image"]
-        y = batch["mask"].long()
         roi = batch["roi"].unsqueeze(1)
+        y = batch["mask"].long()
         output = self(x)
         prob = self.get_prob(output, roi)
-        self.test_metrics.update(prob, y)
+        self.test_metrics[dataloader_idx].update(prob, y)
+        self._current_dataloader_idx = dataloader_idx
 
     def on_test_epoch_end(self):
-        score = self.setup_scores(self.test_metrics)
-        stats = {f"{self.dataset_name}_{k}": v for k, v in score.items()}
-        self.log_dict(stats, sync_dist=True)
-        self.test_metrics.reset()
+        score = self.setup_scores(self.test_metrics[self._current_dataloader_idx])
+        stats = {f"{self.test_dataloader_ids[self._current_dataloader_idx]}_{k}": v for k, v in score.items()}
+        self.log_dict(stats, sync_dist=True, add_dataloader_idx=False)
 
     def setup_scores(self, metric):
         score = metric.compute()

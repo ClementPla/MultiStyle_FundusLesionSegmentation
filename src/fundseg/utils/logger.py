@@ -1,34 +1,36 @@
-import wandb
+import os
+from typing import Optional
+
 from pytorch_lightning.loggers import WandbLogger
 
+import wandb
 
-def init_logger(logger_config, code_dir='.', tags=None, **tracked_params):
-    wandb_logger = WandbLogger(**logger_config,
-                               settings=wandb.Settings(code_dir=code_dir),
-                               config=tracked_params,
-                               tags=tags)
-    
+
+def get_wandb_logger(
+    project_name,
+    tracked_params,
+    tags,
+    item_check_if_run_exists: Optional[tuple[str, str]] = None,
+):
+    item_name, item_value = item_check_if_run_exists
+    if item_check_if_run_exists:
+        if os.environ.get("LOCAL_RANK", None) is None:
+            api = wandb.Api()
+            try:
+                runs = api.runs(f"liv4d-polytechnique/{project_name}")
+                for r in runs:
+                    if item_name in r.config.keys():
+                        if r.config[item_name] == item_value and (
+                            (r.state.lower() == "finished")
+                            or (r.state.lower() == "running")
+                        ):
+                            exit("Run already exists, exiting")
+            except ValueError:
+                print("Project not existing, starting run")
+
+    wandb_logger = WandbLogger(project=project_name, config=tracked_params, tags=tags)
+
+    if os.environ.get("LOCAL_RANK", None) is None:
+        os.environ["WANDB_RUN_NAME"] = wandb_logger.experiment.name
+
     return wandb_logger
-
-def check_if_run_already_started(project_name, discriminating_value, discriminating_key='model_name', return_runname=False,
-                                 failed_state=False):
-    api = wandb.Api()
-    project = api.project(project_name)
-    runs = api.runs(path='/'.join(project.path))
-    try:
-        runs = list(runs)
-    except ValueError:
-        return False
-    for r in runs:
-        if discriminating_key not in r.config:
-            continue
-        if r.config[discriminating_key] == discriminating_value:
-            if r.state == 'running' or r.state == 'finished' or failed_state:
-                print(f'Run {r.id} already exists and is {r.state}.')
-                if return_runname:
-                    return r.id, r.name
-                return r.id
-    return False
-
-
-    
