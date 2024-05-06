@@ -11,10 +11,9 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 from pytorch_lightning.utilities import rank_zero_only
-from pytorch_lightning.utilities.types import STEP_OUTPUT
 
 import wandb
-from fundseg.data.datamodule import ALL_CLASSES
+from fundseg.data.utils import ALL_CLASSES
 
 
 def onehot_to_label(predmap):
@@ -31,11 +30,9 @@ def onehot_to_label(predmap):
         out = torch.cat([zero_class, predmap], 1).long()
         return torch.argmax(out, 1)
     else:
-        raise ValueError(
-            f"The vector should either have 3 or 4 dimension, but got a shape of {predmap.shape}"
-        )
+        raise ValueError(f"The vector should either have 3 or 4 dimension, but got a shape of {predmap.shape}")
 
-            
+
 class LogPredictionSamplesCallback(Callback):
     def __init__(self, wandb_logger, classes, n_images=8, frequency=10):
         self.n_images = n_images
@@ -48,11 +45,7 @@ class LogPredictionSamplesCallback(Callback):
 
     @rank_zero_only
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if (
-            batch_idx < 1
-            and trainer.is_global_zero
-            and (self.__call % self.frequency == 0)
-        ):
+        if batch_idx < 1 and trainer.is_global_zero and (self.__call % self.frequency == 0):
             n = self.n_images
             x = batch["image"][:n].float()
             y = batch["mask"][:n]
@@ -83,9 +76,7 @@ class LogPredictionSamplesCallback(Callback):
                 ]
                 for x_i, y_i, p_i in list(zip(x, y, pred))
             ]
-            self.wandb_logger.log_table(
-                data=data, key=f"Validation Batch {batch_idx}", columns=columns
-            )
+            self.wandb_logger.log_table(data=data, key=f"Validation Batch {batch_idx}", columns=columns)
         self.__call += 1
 
 
@@ -94,9 +85,7 @@ class DropoutSchedulerCallback(Callback):
         self.warm_up = warm_up
         self.dropout = final_dropout
 
-    def on_train_epoch_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule"
-    ) -> None:
+    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         t_max = trainer.max_epochs * self.warm_up
         t_current = trainer.current_epoch
         model = trainer.model
@@ -116,23 +105,15 @@ class DropoutSchedulerCallback(Callback):
             trainer.logger.log_metrics({"dropout": p}, step=trainer.global_step)
 
 
-def get_callbacks(
-    config, wandb_logger=None, classes=ALL_CLASSES, run_name=None
-):
+def get_callbacks(config, wandb_logger=None, classes=ALL_CLASSES, run_name=None):
+    project_name = config["logger"]["project"]
     callbacks = []
     if wandb_logger:
-        log_pred_callback = LogPredictionSamplesCallback(
-            wandb_logger, n_images=8, classes=classes
-        )
+        log_pred_callback = LogPredictionSamplesCallback(wandb_logger, n_images=8, classes=classes)
         callbacks.append(log_pred_callback)
 
     lr_monitor = LearningRateMonitor()
     callbacks.append(lr_monitor)
-    if run_name is None:
-        if wandb.run is not None:
-            run_name = wandb.run.name
-        else:
-            run_name = "dummy_name"
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_mIoU",
@@ -140,7 +121,7 @@ def get_callbacks(
         save_last=True,
         auto_insert_metric_name=True,
         save_top_k=1,
-        dirpath=os.path.join("checkpoints", run_name),
+        dirpath=os.path.join("checkpoints", project_name, os.environ["WANDB_RUN_NAME"]),
     )
 
     callbacks.append(checkpoint_callback)

@@ -1,7 +1,7 @@
 ^define: &img_shape [ 1024, 1024 ]
 
 logger:
-  project: Retinal Lesions Segmentation
+  project: Retinal Lesions Segmentation - V2
 
 
 datasets:
