@@ -1,5 +1,5 @@
-import segmentation_models_pytorch as smp
 import torch.nn as nn
+import torchseg
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
@@ -18,12 +18,12 @@ class SMPModel(BaseModel):
         *args,
         **kwargs,
     ):
-        super(SMPModel, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         encoder_weights = "imagenet" if pretrained else None
         self.arch = arch
         self.encoder_name = encoder
-        self.model = smp.create_model(
+        self.model = torchseg.create_model(
             arch,
             encoder,
             in_channels=in_chans,

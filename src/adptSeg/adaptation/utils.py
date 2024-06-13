@@ -10,7 +10,7 @@ from fundseg.utils.runs import ALL_DATASETS, models_path
 from nntools.utils import Config
 
 from adptSeg.adaptation.const import _all_datasets, trained_probe_path
-from adptSeg.adaptation.encoder_wrapper import ModelEncoder
+from adptSeg.adaptation.model_wrapper import ModelEncoder
 from adptSeg.adaptation.probe import ProbeModule
 
 

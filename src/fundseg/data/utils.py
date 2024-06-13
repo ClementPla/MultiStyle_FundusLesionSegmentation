@@ -1,12 +1,11 @@
 from enum import Flag, auto
 
 
-class Lesions(Flag):
+class Lesions(str, Flag):
     COTTON_WOOL_SPOT = auto()
     EXUDATES = auto()
     HEMORRHAGES = auto()
     MICROANEURYSMS = auto()
-
     @property
     def name(cls):
         name = super(Lesions, cls).name
@@ -35,4 +34,9 @@ class Lesions(Flag):
         return self.length
 
 
-ALL_CLASSES = Lesions.COTTON_WOOL_SPOT | Lesions.EXUDATES | Lesions.HEMORRHAGES | Lesions.MICROANEURYSMS
+ALL_CLASSES = [
+    Lesions.COTTON_WOOL_SPOT.name,
+    Lesions.EXUDATES.name,
+    Lesions.HEMORRHAGES.name,
+    Lesions.MICROANEURYSMS.name,
+]

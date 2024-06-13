@@ -12,12 +12,12 @@ dependencies = [
     "torch-geometric",
     "lightning",
     "torchmetrics",
-    "tensorboard",
     "nntools @ git+https://github.com/ClementPla/NNTools@attrs_dataset",
     "fundus-data-toolkit @ git+https://github.com/ClementPla/fundus-data-toolkit",
     "wandb",
     "attrs",
-    "albumentations"
+    "albumentations",
+    "torchseg"
 ]
 readme = "README.md"
 

@@ -3,6 +3,7 @@ checkpoints_probing/
 wandb/
 test/ 
 
+artifacts/
 .vscode/
 
 figures/**/*.png

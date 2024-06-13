@@ -4,11 +4,12 @@ import torch
 import torch.nn as nn
 import torchmetrics
 from pytorch_lightning import LightningModule, seed_everything
+from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torchmetrics import Metric
 
 import wandb
-from adptSeg.adaptation.const import _all_datasets, get_class_mapping
+from adptSeg.adaptation.const import _all_datasets, batch_dataset_to_integer
 
 seed_everything(1234, workers=True)
 
@@ -42,8 +43,12 @@ class MyPredictions(Metric):
 
     def compute(self):
         super().compute()
-        preds = torch.cat(self.preds)
-        targets = torch.cat(self.targets)
+        if isinstance(self.preds, list):
+            preds = torch.cat(self.preds)
+            targets = torch.cat(self.targets)
+        else:
+            preds = self.preds
+            targets = self.targets
         return preds, targets
     
     
@@ -60,17 +65,18 @@ class WeightedCategoricalMSE(nn.Module):
             return torch.mean((x - y.float())**2)
 
 class ProbeModule(LightningModule):
-    def __init__(self, encoder, lr=0.0005, 
+    def __init__(self, featureExtractor, lr=0.005, 
                  n_classes=5, 
                  weight_decay=0.00001, 
                  weights=None,
-                 datasets=_all_datasets,
                  as_regression=False) -> None:
         super().__init__()
-        self.encoder = encoder
-        self.probe = Probe(encoder.out_chans, n_classes, as_regression=as_regression)
+        
+        self.featureExtractor = featureExtractor
+        self.probe = Probe(featureExtractor.out_chans, n_classes, as_regression=as_regression)
         self.as_regression = as_regression
         self.n_classes = n_classes
+        
         if self.as_regression:
             self.criterion = WeightedCategoricalMSE(weights=weights)
         else:
@@ -85,20 +91,19 @@ class ProbeModule(LightningModule):
             torchmetrics.Specificity(**kwargs),
         )
         self.myPreds = MyPredictions()
-        self.class_mapping = get_class_mapping(datasets)
 
     def forward(self, batch):
         x = self.transfer_batch_to_device(batch, self.device, 0)
-        return self.probe(self.encoder(x))
+        return self.probe(self.featureExtractor(x))
     
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         x = batch["image"]
-        y = batch["Dataset"].cpu()
-        y.apply_(lambda x: self.class_mapping[x])
-        y = y.to(self.device).long()
+        y = batch["tag"]
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
+        
         with torch.no_grad():
-            self.encoder.eval()
-            logits = self.encoder(x)
+            self.featureExtractor.eval()
+            logits = self.featureExtractor(x)
         logits = self.probe(logits)
         loss = self.criterion(logits, y)
         self.log(
@@ -113,10 +118,9 @@ class ProbeModule(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
-        y = batch["Dataset"].cpu()
-        y.apply_(lambda x: self.class_mapping[x])
-        y = y.to(self.device).long()
-        logits = self.encoder(x)
+        y = batch["tag"]
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
+        logits = self.featureExtractor(x)
         logits = self.probe(logits)
         preds = self.get_preds(logits)
         self.validation_metrics.update(preds, target=y)
@@ -127,29 +131,31 @@ class ProbeModule(LightningModule):
             return torch.round(logits).clamp(0, self.n_classes-1).squeeze(1)
         else:
             return torch.argmax(logits, dim=1)
-        
+    
+    
     def test_step(self, batch, batch_idx):
         x = batch["image"]
-        y = batch["Dataset"].cpu()
-        y.apply_(lambda x: self.class_mapping[x])
-        y = y.to(self.device).long()
-        logits = self.encoder(x)
+        y = batch["tag"]
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
+        logits = self.featureExtractor(x)
         logits = self.probe(logits)
         preds = self.get_preds(logits)
         self.myPreds.update(preds, target=y)
 
+    
     def on_test_end(self) -> None:
         preds, targets = self.myPreds.compute()
-        wandb.log(
-            {
-                "conf_mat": wandb.plot.confusion_matrix(
-                    preds=preds.cpu().numpy(),
-                    y_true=targets.cpu().numpy(),
-                    class_names=[k.name for k in _all_datasets],
-                    title="Confusion Matrix",
-                )
-            }
-        )
+        if self.trainer.is_global_zero:
+            wandb.log(
+                {
+                    "conf_mat": wandb.plot.confusion_matrix(
+                        preds=preds.cpu().numpy(),
+                        y_true=targets.cpu().numpy(),
+                        class_names=[k.name for k in _all_datasets],
+                        title="Confusion Matrix",
+                    )
+                }
+            )
 
     def configure_optimizers(self):
         params = self.probe.parameters()

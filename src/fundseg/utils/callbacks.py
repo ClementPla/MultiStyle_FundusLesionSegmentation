@@ -49,8 +49,7 @@ class LogPredictionSamplesCallback(Callback):
             n = self.n_images
             x = batch["image"][:n].float()
             y = batch["mask"][:n]
-            roi = batch["roi"][:n].unsqueeze(1)
-            prob = pl_module.get_prob(outputs, roi)
+            prob = outputs
             pred = pl_module.get_pred(prob)
 
             pred = onehot_to_label(pred)
