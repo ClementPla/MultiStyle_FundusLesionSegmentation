@@ -1,34 +1,40 @@
-import os
+from typing import Union
 
-from fundseg.data.utils import Dataset
-
-_all_datasets = [Dataset.IDRID, Dataset.MESSIDOR, Dataset.DDR, Dataset.FGADR, Dataset.RETINAL_LESIONS]
-
-def get_class_mapping(datasets=_all_datasets):
-    return {k.value: i for i, k in enumerate(datasets)}
-
-def get_reverse_class_mapping(datasets=_all_datasets):
-    return {i: k for i, k in enumerate(datasets)}
-
-runs_ids = {
-    5: "deep-brook-44",
-    4: "driven-thunder-43",
-    3: "silver-wave-42",
-    2: "dutiful-vortex-41",
-    1: "ethereal-puddle-40",
-    0: "earnest-lion-39",
-    -1: "efficient-butterfly-50",
-    Dataset.IDRID | Dataset.RETINAL_LESIONS: "smart-silence-53",
-}
+from fundseg.data.data_factory import FundusDataset
 
 
-def best_modelpath_by_id(model_id):
-    folder = runs_ids[model_id]
-    model_folder = os.path.join(root, folder)
-    list_model = os.listdir(model_folder)
-    best_model = next(_ for _ in list_model if "epoch" in _)
-    return os.path.join(model_folder, best_model)
+def map_dataset_to_integer(dataset: Union[FundusDataset, str]) -> int:
+    match FundusDataset(dataset):
+        case FundusDataset.IDRID:
+            return 0
+        case FundusDataset.MESSIDOR:
+            return 1
+        case FundusDataset.DDR:
+            return 2
+        case FundusDataset.FGADR:
+            return 3
+        case FundusDataset.RETLES:
+            return 4
+        case _:
+            raise ValueError(f"Dataset {dataset} not recognized")
+
+def map_integer_to_dataset(dataset: int) -> FundusDataset:
+    match dataset:
+        case 0:
+            return FundusDataset.IDRID
+        case 1:
+            return FundusDataset.MESSIDOR
+        case 2:
+            return FundusDataset.DDR
+        case 3:
+            return FundusDataset.FGADR
+        case 4:
+            return FundusDataset.RETLES
+        case _:
+            raise ValueError(f"Dataset {dataset} not recognized")
 
 
-root = "checkpoints_probing/"
-trained_probe_path = {k: best_modelpath_by_id(k) for k in runs_ids.keys()}
+def batch_dataset_to_integer(datasets: Union[list[FundusDataset], list[str]]) -> list[int]:
+    return [map_dataset_to_integer(d) for d in datasets]
+    
+_all_datasets = [FundusDataset.IDRID, FundusDataset.MESSIDOR, FundusDataset.DDR, FundusDataset.FGADR, FundusDataset.RETLES]

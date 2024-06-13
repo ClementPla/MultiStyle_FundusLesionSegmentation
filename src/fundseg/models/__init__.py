@@ -1,7 +1,7 @@
-from .lesion_net import LesionNet
-from .lseg import LSeg
-from .pcmnet import ProgressiveMultiscaleConsistentNetwork
-from .smp_model import SMPModel
+from fundseg.models.lesion_net import LesionNet
+from fundseg.models.lseg import LSeg
+from fundseg.models.pcmnet import ProgressiveMultiscaleConsistentNetwork
+from fundseg.models.smp_model import SMPModel
 
 
 def get_model(model_name, **kwargs):

@@ -7,7 +7,7 @@ import torch
 import tqdm
 from adptSeg.adaptation.adversarial import PGD
 from adptSeg.adaptation.const import _all_datasets, get_class_mapping, get_reverse_class_mapping, trained_probe_path
-from adptSeg.adaptation.encoder_wrapper import ModelEncoder
+from adptSeg.adaptation.model_wrapper import ModelEncoder
 from adptSeg.adaptation.probe import ProbeModule
 
 # from captum.robust import PGD

@@ -1,28 +1,35 @@
 from abc import abstractmethod
-from typing import Any, List, Optional
+from typing import Any, List, Mapping, Optional
 
-import segmentation_models_pytorch.base.initialization as smp_init
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
+import torchseg.base.initialization as smp_init
+from huggingface_hub import PyTorchModelHubMixin
 from kornia.morphology import gradient
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import STEP_OUTPUT
-from segmentation_models_pytorch.losses import DiceLoss
+from torchseg.losses import DiceLoss
 from torchvision.utils import draw_segmentation_masks, make_grid
 
 from fundseg.data.utils import ALL_CLASSES
 from fundseg.models.utils.metric import AUCPrecisionRecallCurve
 
 
-class BaseModel(LightningModule):
+class BaseModel(LightningModule, PyTorchModelHubMixin):
     def __init__(
-        self, n_classes=5, classes=ALL_CLASSES, lr=0.001, log_dice=False, smooth_dice=0.225, 
-        test_dataset_id:Optional[List[str]]=None,
-        *args: Any, **kwargs: Any
+        self,
+        n_classes=5,
+        classes=ALL_CLASSES,
+        lr=0.001,
+        log_dice=False,
+        smooth_dice=0.225,
+        test_dataset_id: Optional[List[str]] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.task = "multiclass"
         self.n_classes = n_classes
         self.dice_loss = DiceLoss(mode=self.task, log_loss=log_dice, smooth=smooth_dice)
@@ -47,31 +54,34 @@ class BaseModel(LightningModule):
             }
         )
 
-        self.test_dataloader_ids = test_dataset_id
+        self.test_dataloader_ids = [t.replace("_test", "").replace("_split_1", "") for t in test_dataset_id]
         test_metrics = []
-        
-        for test_id in test_dataset_id:
-            test_metrics.append(torchmetrics.MetricCollection(
-            {
-                "AUC Precision Recall": AUCPrecisionRecallCurve(
-                    task=self.task,
-                    num_classes=self.n_classes,
-                    num_labels=self.n_classes,
-                    validate_args=False,
-                    thresholds=11,
-                ),
-                "mIoU": torchmetrics.JaccardIndex(
-                    task=self.task,
-                    num_labels=self.n_classes,
-                    num_classes=self.n_classes,
-                    average="macro",
-                ),
-            },
-            postfix=f"_test_{test_id}"
-        ))
+
+        for test_id in self.test_dataloader_ids:
+            print(f"Test dataset: {test_id}")
+            test_metrics.append(
+                torchmetrics.MetricCollection(
+                    {
+                        "AUC Precision Recall": AUCPrecisionRecallCurve(
+                            task=self.task,
+                            num_classes=self.n_classes,
+                            num_labels=self.n_classes,
+                            validate_args=False,
+                            thresholds=11,
+                        ),
+                        "mIoU": torchmetrics.JaccardIndex(
+                            task=self.task,
+                            num_labels=self.n_classes,
+                            num_classes=self.n_classes,
+                            average="macro",
+                        ),
+                    },
+                    postfix=f" - {test_id}",
+                )
+            )
         self.test_metrics = nn.ModuleList(test_metrics)
 
-        self._current_dataloader_idx = 0
+        self.current_test_dataloader_idx = 0
         self.save_hyperparameters()
 
     def initialize(self):
@@ -81,6 +91,14 @@ class BaseModel(LightningModule):
     @abstractmethod
     def get_loss(self, logits, mask):
         pass
+
+    @property
+    def classes_label(self):
+        return ["Background", *self.classes]
+
+    @property
+    def classes_legend(self):
+        return self.classes_label
 
     @property
     @abstractmethod
@@ -138,11 +156,8 @@ class BaseModel(LightningModule):
 
     def on_validation_epoch_end(self):
         score = self.setup_scores(self.valid_metrics)
-        self.log_dict(score, sync_dist=True)
+        self.log_dict(score)
         self.valid_metrics.reset()
-
-    def on_test_start(self) -> None:
-        self.test_metrics.reset()
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         x = batch["image"]
@@ -151,12 +166,17 @@ class BaseModel(LightningModule):
         output = self(x)
         prob = self.get_prob(output, roi)
         self.test_metrics[dataloader_idx].update(prob, y)
-        self._current_dataloader_idx = dataloader_idx
 
+    def on_test_batch_end(
+        self, outputs: torch.Tensor | Mapping[str, Any] | None, batch: Any, batch_idx: int, dataloader_idx: int = 0
+    ) -> None:
+        if dataloader_idx != self.current_test_dataloader_idx:
+            score = self.setup_scores(self.test_metrics[self.current_test_dataloader_idx])
+            self.log_dict(score, add_dataloader_idx=False)
+            self.current_test_dataloader_idx = dataloader_idx
     def on_test_epoch_end(self):
-        score = self.setup_scores(self.test_metrics[self._current_dataloader_idx])
-        stats = {f"{self.test_dataloader_ids[self._current_dataloader_idx]}_{k}": v for k, v in score.items()}
-        self.log_dict(stats, sync_dist=True, add_dataloader_idx=False)
+        score = self.setup_scores(self.test_metrics[-1])
+        self.log_dict(score, add_dataloader_idx=False)
 
     def setup_scores(self, metric):
         score = metric.compute()
@@ -174,29 +194,16 @@ class BaseModel(LightningModule):
                 new_score[k] = torch.nan_to_num(v)
         return new_score
 
-    @property
-    def classes_label(self):
-        return ["Background", *self.classes.name] 
-
-    @property
-    def classes_legend(self):
-        return self.classes_label
-
-    def get_grid_with_predicted_mask(self, batch, 
-                                     alpha=0.8, 
-                                     colors=None, 
-                                     ncol=8, 
-                                     padding=2, 
-                                     border_alpha=1.0,
-                                     kernel_size=5):
-
+    def get_grid_with_predicted_mask(
+        self, batch, alpha=0.8, colors=None, ncol=8, padding=2, border_alpha=1.0, kernel_size=5
+    ):
         prob = self.inference_step(batch)
         pred = self.get_pred(prob).unsqueeze(1)
         image = batch["image"].to(self.device)
         grid_image = make_grid(image, nrow=ncol, padding=padding, normalize=True, scale_each=True) * 255
         grid_pred = make_grid(pred, nrow=ncol, padding=padding)[0]
         grid_pred = F.one_hot(grid_pred, num_classes=self.n_classes).permute((2, 0, 1))
-        
+
         kernel = torch.ones(kernel_size, kernel_size, device=self.device)
         border = gradient(grid_pred.unsqueeze(0), kernel).squeeze(0)
         border[0] = 0
@@ -211,20 +218,13 @@ class BaseModel(LightningModule):
 
         return draw
 
-    def get_grid_with_gt_mask(self, batch, 
-                              alpha=0.8, 
-                              colors=None, 
-                                     ncol=8, 
-                                     padding=2, 
-                                     border_alpha=1.0,
-                                     kernel_size=5):
-        
+    def get_grid_with_gt_mask(self, batch, alpha=0.8, colors=None, ncol=8, padding=2, border_alpha=1.0, kernel_size=5):
         gt = batch["mask"].unsqueeze(1).to(self.device).long()
         image = batch["image"].to(self.device)
         grid_image = make_grid(image, nrow=ncol, padding=padding, normalize=True, scale_each=True) * 255
         grid_gt = make_grid(gt, nrow=ncol, padding=padding)[0]
         grid_gt = F.one_hot(grid_gt, num_classes=self.n_classes).permute((2, 0, 1))
-        
+
         kernel = torch.ones(kernel_size, kernel_size, device=self.device)
         border = gradient(grid_gt.unsqueeze(0), kernel).squeeze(0)
         border[0] = 0

@@ -1,7 +1,7 @@
 ^define: &img_shape [ 1024, 1024 ]
 
 logger:
-  project: Conditional-Style-Segmentation-Networks - Exudates
+  project: Retinal Lesions Segmentation - V2
 
 
 datasets:
@@ -14,7 +14,7 @@ datasets:
 
 data:
   img_size: *img_shape
-  batch_size: 32  
+  batch_size: 64  
   valid_size: 0.15
   ^num_workers: 4
   ^eval_batch_size: 2

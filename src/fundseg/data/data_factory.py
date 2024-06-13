@@ -16,14 +16,16 @@ from fundus_data_toolkit.datamodules.utils import merge_existing_datamodules
 from tqdm import tqdm
 
 
-class FundusDataset(Enum):
+class FundusDataset(str, Enum):
     IDRID: str = "IDRID"
     FGADR: str = "FGADR"
     MESSIDOR: str = "MESSIDOR"
     DDR: str = "DDR"
     RETLES: str = "RETLES"
 
-ALL_DATASETS = ['IDRID', 'FGADR', 'MESSIDOR', 'DDR', 'RETLES']
+
+ALL_DATASETS = [FundusDataset.IDRID, FundusDataset.FGADR, FundusDataset.MESSIDOR, FundusDataset.DDR, FundusDataset.RETLES]
+
 
 def setup_data_toolkit(paths: Dict[str, Path]):
     register_paths(paths, Task.SEGMENTATION)
@@ -37,58 +39,74 @@ def setup_data_from_config(datasets: Dict[str, str]):
     setup_data_toolkit(paths)
 
 
-def get_datamodule(datasets: List[str], dataset_args):
+def get_datamodule(datasets: List[str], training_sets: List[str], dataset_args, separate_test_test: bool = True):
     all_datamodules = []
     for d in datasets:
         match FundusDataset(d):
             case FundusDataset.IDRID:
-                all_datamodules.append(
-                    IDRiDDataModule_s(
-                        SEG_PATHS.IDRID, precise_autocrop=True, 
-                        data_augmentation_type=DAType.HEAVY,
-                        flag=cv2.IMREAD_COLOR, **dataset_args
-                    ).setup_all()
-                )
+                datamodule = IDRiDDataModule_s(
+                    SEG_PATHS.IDRID, precise_autocrop=True, flag=cv2.IMREAD_COLOR, **dataset_args
+                ).setup_all()
+
             case FundusDataset.FGADR:
-                all_datamodules.append(
-                    FGADRDataModule_s(
-                        SEG_PATHS.FGADR, precise_autocrop=True, flag=cv2.IMREAD_COLOR, 
-                        data_augmentation_type=DAType.HEAVY,
-                        **dataset_args
-                    ).setup_all()
-                )
+                datamodule = FGADRDataModule_s(
+                    SEG_PATHS.FGADR,
+                    precise_autocrop=True,
+                    flag=cv2.IMREAD_COLOR,
+                    **dataset_args,
+                ).setup_all()
             case FundusDataset.MESSIDOR:
-                all_datamodules.append(
-                    MESSIDORDataModule_s(
-                        SEG_PATHS.MESSIDOR, precise_autocrop=True, flag=cv2.IMREAD_COLOR, 
-                        data_augmentation_type=DAType.HEAVY,
-                        **dataset_args
-                    ).setup_all()
-                )
+                datamodule = MESSIDORDataModule_s(
+                    SEG_PATHS.MESSIDOR,
+                    precise_autocrop=True,
+                    flag=cv2.IMREAD_COLOR,
+                    **dataset_args,
+                ).setup_all()
             case FundusDataset.DDR:
-                all_datamodules.append(
-                    DDRDataModule_s(
-                        SEG_PATHS.DDR, precise_autocrop=True, flag=cv2.IMREAD_COLOR, 
-                        data_augmentation_type=DAType.HEAVY,
-                        **dataset_args
-                    ).setup_all()
-                )
+                datamodule = DDRDataModule_s(
+                    SEG_PATHS.DDR,
+                    precise_autocrop=True,
+                    flag=cv2.IMREAD_COLOR,
+                    **dataset_args,
+                ).setup_all()
             case FundusDataset.RETLES:
-                all_datamodules.append(
-                    RETLESDataModule_s(
-                        SEG_PATHS.RETLES, precise_autocrop=True, flag=cv2.IMREAD_COLOR, 
-                        data_augmentation_type=DAType.HEAVY,
-                        **dataset_args
-                    ).setup_all()
-                )
-    return merge_existing_datamodules(all_datamodules)
+                datamodule = RETLESDataModule_s(
+                    SEG_PATHS.RETLES,
+                    precise_autocrop=True,
+                    flag=cv2.IMREAD_COLOR,
+                    **dataset_args,
+                ).setup_all()
+
+        if datamodule.train is not None:
+            datamodule.train.tag = FundusDataset(d)
+        if datamodule.val is not None:
+            datamodule.val.tag = FundusDataset(d)
+        if datamodule.test is not None:
+            datamodule.test.tag = FundusDataset(d)
+
+        if d not in training_sets:
+            datamodule.train = None
+        all_datamodules.append(datamodule)
+
+    return merge_existing_datamodules(all_datamodules, separate_test_sets=separate_test_test)
 
 
-def get_datamodule_from_config(config: Dict[str, str], training_datasets: List[str], dataset_args):
+def get_datamodule_from_config(
+    config: Dict[str, str], training_datasets: List[str], dataset_args, separate_test_test=True
+):
     setup_data_from_config(config)
     available_datasets = [FundusDataset(d.upper()) for d in config]
     training_datasets = [FundusDataset(d.upper()) for d in training_datasets]
-    return get_datamodule(available_datasets, training_datasets, dataset_args)
+    datamodule = get_datamodule(
+        available_datasets, training_datasets, dataset_args, separate_test_test=separate_test_test
+    )
+
+    print(f"Training on datasets: {training_datasets}")
+    print(f"Training samples: {len(datamodule.train)}, {len(datamodule.train_dataloader())} batches")
+    print(f"Validation samples: {len(datamodule.val)}, {len(datamodule.val_dataloader())} batches")
+    print(f"Test samples: {len(datamodule.test)}")
+
+    return datamodule
 
 
 def precache_datamodule(config: Dict[str, str], dataset_args):
