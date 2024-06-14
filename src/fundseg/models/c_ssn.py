@@ -3,12 +3,13 @@ import torch
 import torch.distributions as td
 import torch.nn as nn
 import torchseg
+from adptSeg.adaptation.const import batch_dataset_to_integer
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from fundseg.models.base_model import BaseModel
-from fundseg.models.utils.probs_style import ReshapedDistribution, StochasticSegmentationNetworkLossMCIntegral
-from adptSeg.adaptation.const import batch_dataset_to_integer
+from fundseg.models.utils.probs_style import ReshapedDistribution, StochasticSegmentationNetworkLossMCIntegral, TaskMode
+
 
 class CSNNStyleModel(BaseModel):
     def __init__(
@@ -48,7 +49,8 @@ class CSNNStyleModel(BaseModel):
         self.optim = optimizer
         self.epsilon = epsilon
         self.rank = rank
-        self.loss_function = StochasticSegmentationNetworkLossMCIntegral(num_mc_samples=20)
+        task_mode = TaskMode.MULTICLASS if n_classes > 2 else TaskMode.BINARY
+        self.loss_function = StochasticSegmentationNetworkLossMCIntegral(num_mc_samples=20, mode=task_mode)
         self.distribution = None
 
     @property
@@ -122,16 +124,15 @@ class CSNNStyleModel(BaseModel):
             return torch.tensor(0.0)
         else:
             return self.loss_function(logits, mask, self.distribution)
-    
-    
+
     def training_step(self, batch, batch_idx):
         x = batch["image"]
         mask = batch["mask"].long()
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
-        
-        logits = self.forward_train(x)
+
+        logits = self.forward_train(x, style)
         loss = self.get_loss(logits, mask)
         loss = torch.nan_to_num(loss)
         self.log(
@@ -143,7 +144,7 @@ class CSNNStyleModel(BaseModel):
             prog_bar=True,
         )
         return loss
-    
+
     def get_prob(self, logits, roi=None):
         if roi is not None:
             if roi.ndim == 4:
@@ -155,28 +156,33 @@ class CSNNStyleModel(BaseModel):
     def get_pred(self, prob):
         return torch.argmax(prob, 1)
 
-
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
         mask = batch["mask"].long()
+        style = batch["tag"]
+        style = batch_dataset_to_integer(style)
+        style = torch.tensor(style, device=self.device)
         roi = batch["roi"].unsqueeze(1)
-        logits = self.forward(x)
+        logits = self.forward(x, style)
         loss = self.get_loss(logits, mask)
         self.log("val_loss", loss, on_epoch=True, on_step=False, sync_dist=True)
         output = self.get_prob(logits, roi)
         self.valid_metrics.update(output, mask)
         return output
-    
+
     @torch.inference_mode()
     def inference_step(self, batch):
         self.eval()
         batch = self.transfer_batch_to_device(batch, self.device, 0)
         x = batch["image"]
         roi = batch["roi"].unsqueeze(1)
-        logits = self(x)
+        style = batch["tag"]
+        style = batch_dataset_to_integer(style)
+        style = torch.tensor(style, device=self.device)
+        logits = self.forward(x, style)
         output = self.get_prob(logits, roi)
         return output
-    
+
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         x = batch["image"]
         roi = batch["roi"].unsqueeze(1)
@@ -184,7 +190,6 @@ class CSNNStyleModel(BaseModel):
         output = self(x)
         prob = self.get_prob(output, roi)
         self.test_metrics[dataloader_idx].update(prob, y)
-
 
     def configure_optimizers(self):
         params = self.parameters()

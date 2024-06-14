@@ -22,23 +22,22 @@ torch.set_float32_matmul_precision("high")
 
 
 def run_train_test(architecture, config, train_datasets):
-    
     project_name = "Conditional-Style-Segmentation-Networks - Exudates"
     config["logger"]["project"] = project_name
-    
+
     if not isinstance(train_datasets, list):
         train_datasets = [train_datasets]
     tags = train_datasets
 
-    datamodule = get_datamodule_from_config(config['datasets'], training_datasets=train_datasets, dataset_args=config["data"])
-    
-    datamodule.return_tag(True)
-    
-    test_dataset_id = [d.id for d in datamodule.test]
-    model = CSNNStyleModel(arch='unet', encoder='resnet34', **config["model"], test_dataset_id=test_dataset_id,
-                           classes=[Lesions.EXUDATES])
+    datamodule = get_datamodule_from_config(
+        config["datasets"], training_datasets=train_datasets, dataset_args=config["data"]
+    )
 
-    
+    datamodule.return_tag(True)
+
+    test_dataset_id = [d.id for d in datamodule.test]
+    model = CSNNStyleModel(arch="unet", encoder="resnet34", **config["model"], test_dataset_id=test_dataset_id)
+
     print(model)
     print(model.classes_legend)
     # wandb_logger = get_wandb_logger(
@@ -58,8 +57,6 @@ def run_train_test(architecture, config, train_datasets):
     #     strategy="ddp",
     #     callbacks=callbacks,
     # )
-    
-    
 
     # trainer.fit(model, train_dataloaders=datamodule.train_dataloader(), val_dataloaders=datamodule.val_dataloader())
     # trainer.test(model, dataloaders=datamodule.test_dataloader())

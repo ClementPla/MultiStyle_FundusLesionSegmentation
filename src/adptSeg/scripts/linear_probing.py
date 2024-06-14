@@ -26,7 +26,7 @@ def init_wandb(name, hparams):
 def train(feature_type, position):
     config_file = "configs/config.yaml"
     config = Config(config_file)
-    config["data"]["batch_size"] = 32
+    config["data"]["batch_size"] = 64
     config["data"]["eval_batch_size"] = 16
     config["data"]["random_crop"] = None
     # config["data"]["use_cache"] = True
@@ -43,10 +43,10 @@ def train(feature_type, position):
     fundus_datamodule.val.return_tag = True
     fundus_datamodule.test.return_tag = True
 
-    fundus_datamodule.train.use_cache = False
+    fundus_datamodule.train.use_cache = True
     fundus_datamodule.val.use_cache = False
     fundus_datamodule.test.use_cache = False
-    # fundus_datamodule.train.init_cache()
+    [c.init_cache() for c in fundus_datamodule.train.cache]
     # fundus_datamodule.val.init_cache()
 
     weights = OrderedDict()
@@ -92,7 +92,7 @@ def train(feature_type, position):
     trainer = Trainer(
         accelerator="gpu",
         devices=[0, 1],
-        max_epochs=2,
+        max_epochs=50,
         callbacks=[
             checkpoint,
             EarlyStopping(monitor="MulticlassAccuracy", mode="max", patience=10),
