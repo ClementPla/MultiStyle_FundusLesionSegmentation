@@ -1,4 +1,5 @@
 import math
+from enum import Enum
 from typing import Tuple
 
 import torch
@@ -7,10 +8,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class TaskMode(str, Enum):
+    BINARY = "BINARY"
+    MULTICLASS = "MULTICLASS"
+
+
 class StochasticSegmentationNetworkLossMCIntegral(nn.Module):
-    def __init__(self, num_mc_samples: int = 1):
+    def __init__(self, num_mc_samples: int = 1, mode: TaskMode = TaskMode.BINARY):
         super().__init__()
         self.num_mc_samples = num_mc_samples
+        self.mode = mode
 
     @staticmethod
     def fixed_re_parametrization_trick(dist, num_samples):
@@ -24,24 +31,32 @@ class StochasticSegmentationNetworkLossMCIntegral(nn.Module):
         batch_size = logits.shape[0]
         num_classes = logits.shape[1]
 
-        logit_sample = self.fixed_re_parametrization_trick(
-            distribution, self.num_mc_samples
-        )
-        target = target.unsqueeze(1)
-        target = target.expand((self.num_mc_samples,) + target.shape)
+        logit_sample = self.fixed_re_parametrization_trick(distribution, self.num_mc_samples)
+        target = target.unsqueeze(0)
+        target = target.expand((self.num_mc_samples, *target.shape))
         flat_size = self.num_mc_samples * batch_size
         logit_sample = logit_sample.view((flat_size, num_classes, -1))
         target = target.reshape((flat_size, -1))
         target = target.unsqueeze(1)
-        log_prob = -F.binary_cross_entropy_with_logits(
-            logit_sample, target, reduction="none"
-        ).view((self.num_mc_samples, batch_size, -1))
 
-        loglikelihood = torch.mean(
-            torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
-            - math.log(self.num_mc_samples)
-        )
-        loss = -loglikelihood
+        match self.mode:
+            case TaskMode.BINARY:
+                log_prob = -F.binary_cross_entropy_with_logits(logit_sample, target, reduction="none").view(
+                    (self.num_mc_samples, batch_size, -1)
+                )
+                loglikelihood = torch.mean(
+                    torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0) - math.log(self.num_mc_samples)
+                )
+                loss = -loglikelihood
+
+            case TaskMode.MULTICLASS:
+                log_prob = -F.cross_entropy(logit_sample, target.squeeze(1), reduction="none").view(
+                    (self.num_mc_samples, batch_size, -1)
+                )
+                loglikelihood = torch.mean(
+                    torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0) - math.log(self.num_mc_samples)
+                )
+                loss = -loglikelihood
 
         return loss
 
@@ -78,9 +93,7 @@ class ReshapedDistribution(td.Distribution):
         return self.base_distribution.variance.view(self.new_shape)
 
     def rsample(self, sample_shape=torch.Size()):
-        return self.base_distribution.rsample(sample_shape).view(
-            sample_shape + self.new_shape
-        )
+        return self.base_distribution.rsample(sample_shape).view(sample_shape + self.new_shape)
 
     def log_prob(self, value):
         return self.base_distribution.log_prob(value.view(self.batch_shape + (-1,)))
