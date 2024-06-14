@@ -18,6 +18,7 @@ def map_dataset_to_integer(dataset: Union[FundusDataset, str]) -> int:
         case _:
             raise ValueError(f"Dataset {dataset} not recognized")
 
+
 def map_integer_to_dataset(dataset: int) -> FundusDataset:
     match dataset:
         case 0:
@@ -36,5 +37,12 @@ def map_integer_to_dataset(dataset: int) -> FundusDataset:
 
 def batch_dataset_to_integer(datasets: Union[list[FundusDataset], list[str]]) -> list[int]:
     return [map_dataset_to_integer(d) for d in datasets]
-    
-_all_datasets = [FundusDataset.IDRID, FundusDataset.MESSIDOR, FundusDataset.DDR, FundusDataset.FGADR, FundusDataset.RETLES]
+
+
+_all_datasets = [
+    FundusDataset.IDRID,
+    FundusDataset.MESSIDOR,
+    FundusDataset.DDR,
+    FundusDataset.FGADR,
+    FundusDataset.RETLES,
+]

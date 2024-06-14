@@ -1,8 +1,10 @@
 import os
-import sys
 from argparse import ArgumentParser
+from collections import OrderedDict
 
+import numpy as np
 import torch
+from adptSeg.adaptation.const import batch_dataset_to_integer
 from adptSeg.adaptation.model_wrapper import FeatureType, ModelFeaturesExtractor
 from adptSeg.adaptation.probe import ProbeModule
 from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
@@ -15,9 +17,6 @@ from pytorch_lightning.utilities import rank_zero_only
 
 import wandb
 
-# This hack is needed to allow deserializing the model
-sys.path.append("src/fundseg/")
-
 
 @rank_zero_only
 def init_wandb(name, hparams):
@@ -27,7 +26,7 @@ def init_wandb(name, hparams):
 def train(feature_type, position):
     config_file = "configs/config.yaml"
     config = Config(config_file)
-    config["data"]["batch_size"] = 96
+    config["data"]["batch_size"] = 32
     config["data"]["eval_batch_size"] = 16
     config["data"]["random_crop"] = None
     # config["data"]["use_cache"] = True
@@ -44,23 +43,33 @@ def train(feature_type, position):
     fundus_datamodule.val.return_tag = True
     fundus_datamodule.test.return_tag = True
 
-    fundus_datamodule.train.use_cache = True
-    fundus_datamodule.val.use_cache = True
+    fundus_datamodule.train.use_cache = False
+    fundus_datamodule.val.use_cache = False
     fundus_datamodule.test.use_cache = False
-    fundus_datamodule.train.init_cache()
-    fundus_datamodule.val.init_cache()
+    # fundus_datamodule.train.init_cache()
+    # fundus_datamodule.val.init_cache()
 
-    weights = []
+    weights = OrderedDict()
     dataset = fundus_datamodule.train
     for d in dataset.datasets:
-        weights.append(len(d))
-    weights = torch.Tensor(weights)
+        weights[d.tag] = len(d)
 
+    keys = list(weights.keys())
+    d_id = batch_dataset_to_integer(keys)
+    argsort = np.argsort(d_id)
+    keys = [keys[i] for i in argsort]
+    weights = [weights[k] for k in keys]
+
+    weights = torch.Tensor(weights)
     weights = weights.sum() / (weights * len(weights))
 
     hparams = {"position": position, "model_name": model_name, "feature_type": feature_type.name}
 
     featureExtractor = ModelFeaturesExtractor(model, position=position, feature_type=feature_type)
+    hparams["n_features"] = featureExtractor.out_chans
+    hparams["weights"] = weights.tolist()
+    hparams["datasets"] = keys
+
     logger = WandbLogger(
         project="Probing-Lesions-Segmentation-Positions",
         config=hparams,
@@ -83,7 +92,7 @@ def train(feature_type, position):
     trainer = Trainer(
         accelerator="gpu",
         devices=[0, 1],
-        max_epochs=50,
+        max_epochs=2,
         callbacks=[
             checkpoint,
             EarlyStopping(monitor="MulticlassAccuracy", mode="max", patience=10),

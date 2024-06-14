@@ -1,8 +1,7 @@
-^define: &img_shape [ 1024, 1024 ]
+^define: &img_shape [1024, 1024]
 
 logger:
   project: Conditional-Style-Segmentation-Networks - Exudates
-
 
 datasets:
   IDRID: /home/clement/Documents/data/IDRID/A. Segmentation/
@@ -11,10 +10,9 @@ datasets:
   DDR: /home/clement/Documents/data/DDR-dataset/lesion_segmentation/
   RETLES: /home/clement/Documents/data/retinal-lesions-v20191227/
 
-
 data:
   img_size: *img_shape
-  batch_size: 32  
+  batch_size: 32
   valid_size: 0.15
   ^num_workers: 4
   ^eval_batch_size: 2
@@ -35,4 +33,3 @@ trainer:
   num_sanity_val_steps: 2
   log_every_n_steps: 50
   sync_batchnorm: True
-
