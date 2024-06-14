@@ -21,9 +21,8 @@ class Probe(nn.Module):
         self.pre_linear = nn.Identity()
         if as_regression:
             self.probe = nn.Linear(n_channels, 1)
-        else:    
+        else:
             self.probe = nn.Linear(n_channels, n_classes)
-        
 
     def forward(self, x):
         x = self.pre_linear(x)
@@ -50,33 +49,33 @@ class MyPredictions(Metric):
             preds = self.preds
             targets = self.targets
         return preds, targets
-    
-    
+
+
 class WeightedCategoricalMSE(nn.Module):
     def __init__(self, weights=None):
         super().__init__()
         self.weights = weights
+
     def forward(self, x, y):
         if self.weights is not None:
             weights = self.weights.to(x.device)
             weights = weights[y.long().squeeze()]
-            return torch.mean(weights * (x - y.float())**2)
+            return torch.mean(weights * (x - y.float()) ** 2)
         else:
-            return torch.mean((x - y.float())**2)
+            return torch.mean((x - y.float()) ** 2)
+
 
 class ProbeModule(LightningModule):
-    def __init__(self, featureExtractor, lr=0.005, 
-                 n_classes=5, 
-                 weight_decay=0.00001, 
-                 weights=None,
-                 as_regression=False) -> None:
+    def __init__(
+        self, featureExtractor, lr=0.005, n_classes=5, weight_decay=0.00001, weights=None, as_regression=False
+    ) -> None:
         super().__init__()
-        
+
         self.featureExtractor = featureExtractor
         self.probe = Probe(featureExtractor.out_chans, n_classes, as_regression=as_regression)
         self.as_regression = as_regression
         self.n_classes = n_classes
-        
+
         if self.as_regression:
             self.criterion = WeightedCategoricalMSE(weights=weights)
         else:
@@ -95,12 +94,12 @@ class ProbeModule(LightningModule):
     def forward(self, batch):
         x = self.transfer_batch_to_device(batch, self.device, 0)
         return self.probe(self.featureExtractor(x))
-    
+
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         x = batch["image"]
         y = batch["tag"]
-        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
-        
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()
+
         with torch.no_grad():
             self.featureExtractor.eval()
             logits = self.featureExtractor(x)
@@ -113,36 +112,35 @@ class ProbeModule(LightningModule):
             on_step=True,
             sync_dist=True,
             prog_bar=True,
+            batch_size=x.size(0),
         )
         return loss
 
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
         y = batch["tag"]
-        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()
         logits = self.featureExtractor(x)
         logits = self.probe(logits)
         preds = self.get_preds(logits)
         self.validation_metrics.update(preds, target=y)
-        self.log_dict(self.validation_metrics, on_epoch=True, sync_dist=True)
-    
+        self.log_dict(self.validation_metrics, on_epoch=True, sync_dist=True, batch_size=x.size(0))
+
     def get_preds(self, logits):
         if self.as_regression:
-            return torch.round(logits).clamp(0, self.n_classes-1).squeeze(1)
+            return torch.round(logits).clamp(0, self.n_classes - 1).squeeze(1)
         else:
             return torch.argmax(logits, dim=1)
-    
-    
+
     def test_step(self, batch, batch_idx):
         x = batch["image"]
         y = batch["tag"]
-        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()    
+        y = torch.Tensor(batch_dataset_to_integer(y)).to(self.device).long()
         logits = self.featureExtractor(x)
         logits = self.probe(logits)
         preds = self.get_preds(logits)
         self.myPreds.update(preds, target=y)
 
-    
     def on_test_end(self) -> None:
         preds, targets = self.myPreds.compute()
         if self.trainer.is_global_zero:

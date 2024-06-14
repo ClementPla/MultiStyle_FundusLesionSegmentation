@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Dict, List
 
 import cv2
-from fundus_data_toolkit.data_aug import DAType
 from fundus_data_toolkit.datamodules import SEG_PATHS, Task, register_paths
 from fundus_data_toolkit.datamodules.segmentation import (
     DDRDataModule_s,
@@ -24,7 +23,13 @@ class FundusDataset(str, Enum):
     RETLES: str = "RETLES"
 
 
-ALL_DATASETS = [FundusDataset.IDRID, FundusDataset.FGADR, FundusDataset.MESSIDOR, FundusDataset.DDR, FundusDataset.RETLES]
+ALL_DATASETS = [
+    FundusDataset.IDRID,
+    FundusDataset.FGADR,
+    FundusDataset.MESSIDOR,
+    FundusDataset.DDR,
+    FundusDataset.RETLES,
+]
 
 
 def setup_data_toolkit(paths: Dict[str, Path]):
