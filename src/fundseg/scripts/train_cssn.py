@@ -21,8 +21,9 @@ seed_everything(1234, workers=True)
 torch.set_float32_matmul_precision("high")
 
 
-def run_train_test(architecture, config, train_datasets):
-    project_name = "Conditional-Style-Segmentation-Networks - Exudates"
+def run_train_test(config, train_datasets):
+    architecture = "unet_seresnext50_32x4d"
+    project_name = "Conditional-Style-Segmentation-Networks"
     config["logger"]["project"] = project_name
 
     if not isinstance(train_datasets, list):
@@ -36,37 +37,35 @@ def run_train_test(architecture, config, train_datasets):
     datamodule.return_tag(True)
 
     test_dataset_id = [d.id for d in datamodule.test]
-    model = CSNNStyleModel(arch="unet", encoder="resnet34", **config["model"], test_dataset_id=test_dataset_id)
+    model = CSNNStyleModel(arch="unet", encoder="seresnext50_32x4d", **config["model"], test_dataset_id=test_dataset_id)
 
-    print(model)
-    print(model.classes_legend)
-    # wandb_logger = get_wandb_logger(
-    #     project_name=project_name,
-    #     tracked_params=config.tracked_params,
-    #     tags=tags,
-    #     item_check_if_run_exists=("model/architecture", architecture),
-    # )
-    # callbacks = get_callbacks(
-    #     config,
-    #     classes=ALL_CLASSES,
-    #     wandb_logger=wandb_logger,
-    # )
-    # trainer = Trainer(
-    #     **config["trainer"],
-    #     logger=wandb_logger,
-    #     strategy="ddp",
-    #     callbacks=callbacks,
-    # )
+    wandb_logger = get_wandb_logger(
+        project_name=project_name,
+        tracked_params=config.tracked_params,
+        tags=tags,
+        item_check_if_run_exists=("model/architecture", architecture),
+    )
+    callbacks = get_callbacks(
+        config,
+        classes=ALL_CLASSES,
+        wandb_logger=wandb_logger,
+    )
+    trainer = Trainer(
+        **config["trainer"],
+        devices=[0],
+        strategy="auto",
+        logger=wandb_logger,
+        callbacks=callbacks,
+    )
 
-    # trainer.fit(model, train_dataloaders=datamodule.train_dataloader(), val_dataloaders=datamodule.val_dataloader())
-    # trainer.test(model, dataloaders=datamodule.test_dataloader())
+    trainer.fit(model, train_dataloaders=datamodule.train_dataloader(), val_dataloaders=datamodule.val_dataloader())
+    trainer.test(model, dataloaders=datamodule.test_dataloader())
 
-    # wandb.finish()
+    wandb.finish()
 
 
 def main():
     parser = argparse.ArgumentParser(prog="Segmentation Lesions in Fundus")
-    parser.add_argument("--model", type=str, help="Model name")
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.003)
     parser.add_argument("--optimizer", type=str, help="Optimizer", default="adamw")
     parser.add_argument("--log_dice", type=bool, help="Use the log of dice loss", default=False)
@@ -75,7 +74,7 @@ def main():
     args = parser.parse_args()
 
     datasets = ALL_DATASETS
-    config_file = "configs/config.yaml"
+    config_file = "configs/config_cssn.yaml"
     config = Config(config_file)
 
     config["model"] = {}
@@ -84,9 +83,7 @@ def main():
     config["model"]["smooth_dice"] = args.dice_smooth
     config["model"]["log_dice"] = args.log_dice
 
-    model_name = args.model
-
-    run_train_test(model_name, config, datasets)
+    run_train_test(config, datasets)
 
 
 if __name__ == "__main__":
