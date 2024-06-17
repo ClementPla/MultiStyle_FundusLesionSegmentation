@@ -128,7 +128,7 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
         roi = batch["roi"].unsqueeze(1)
         logits = self(x)
         loss = self.get_loss(logits, mask)
-        self.log("val_loss", loss, on_epoch=True, on_step=False, sync_dist=True)
+        self.log("val_loss", loss.to(self.device), on_epoch=True, on_step=False, sync_dist=True)
         output = self.get_prob(logits, roi)
         self.valid_metrics.update(output, mask)
         return output
@@ -156,7 +156,7 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
 
     def on_validation_epoch_end(self):
         score = self.setup_scores(self.valid_metrics)
-        self.log_dict(score)
+        self.log_dict(score, sync_dist=True)
         self.valid_metrics.reset()
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
@@ -174,9 +174,10 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
             score = self.setup_scores(self.test_metrics[self.current_test_dataloader_idx])
             self.log_dict(score, add_dataloader_idx=False)
             self.current_test_dataloader_idx = dataloader_idx
+
     def on_test_epoch_end(self):
         score = self.setup_scores(self.test_metrics[-1])
-        self.log_dict(score, add_dataloader_idx=False)
+        self.log_dict(score, add_dataloader_idx=False, sync_dist=True)
 
     def setup_scores(self, metric):
         score = metric.compute()
@@ -189,9 +190,9 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
                     if c_legend == "Background":
                         continue
                     score_name = f"{k} {classes[i]}"
-                    new_score[score_name] = torch.nan_to_num(v[i])
+                    new_score[score_name] = torch.nan_to_num(v[i]).to(self.device)
             else:
-                new_score[k] = torch.nan_to_num(v)
+                new_score[k] = torch.nan_to_num(v).to(self.device)
         return new_score
 
     def get_grid_with_predicted_mask(

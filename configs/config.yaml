@@ -12,9 +12,9 @@ datasets:
 
 data:
   img_size: *img_shape
-  batch_size: 32
+  batch_size: 16
   valid_size: 0.15
-  ^num_workers: 4
+  ^num_workers: 6
   ^eval_batch_size: 2
   use_cache: True
   persistent_workers: True

@@ -104,7 +104,7 @@ class DropoutSchedulerCallback(Callback):
             trainer.logger.log_metrics({"dropout": p}, step=trainer.global_step)
 
 
-def get_callbacks(config, wandb_logger=None, classes=ALL_CLASSES, run_name=None):
+def get_callbacks(config, wandb_logger=None, classes=ALL_CLASSES, run_name=None, dropout=None):
     project_name = config["logger"]["project"]
     callbacks = []
     if wandb_logger:
@@ -124,7 +124,8 @@ def get_callbacks(config, wandb_logger=None, classes=ALL_CLASSES, run_name=None)
     )
 
     callbacks.append(checkpoint_callback)
-    callbacks.append(DropoutSchedulerCallback())
+    if dropout:
+        callbacks.append(DropoutSchedulerCallback())
 
     if config["trainer"].pop("early_stopping", False):
         early_stopping = EarlyStopping(monitor="val_mIoU", mode="max", patience=25)

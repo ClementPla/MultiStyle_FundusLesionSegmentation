@@ -30,34 +30,19 @@ class StochasticSegmentationNetworkLossMCIntegral(nn.Module):
     def forward(self, logits, target, distribution, **kwargs):
         batch_size = logits.shape[0]
         num_classes = logits.shape[1]
-
+        assert num_classes >= 2  # not implemented for binary case with implied background
+        # logit_sample = distribution.rsample((self.num_mc_samples,))
         logit_sample = self.fixed_re_parametrization_trick(distribution, self.num_mc_samples)
-        target = target.unsqueeze(0)
+        target = target.unsqueeze(1)
         target = target.expand((self.num_mc_samples, *target.shape))
+
         flat_size = self.num_mc_samples * batch_size
         logit_sample = logit_sample.view((flat_size, num_classes, -1))
         target = target.reshape((flat_size, -1))
-        target = target.unsqueeze(1)
 
-        match self.mode:
-            case TaskMode.BINARY:
-                log_prob = -F.binary_cross_entropy_with_logits(logit_sample, target, reduction="none").view(
-                    (self.num_mc_samples, batch_size, -1)
-                )
-                loglikelihood = torch.mean(
-                    torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0) - math.log(self.num_mc_samples)
-                )
-                loss = -loglikelihood
-
-            case TaskMode.MULTICLASS:
-                log_prob = -F.cross_entropy(logit_sample, target.squeeze(1), reduction="none").view(
-                    (self.num_mc_samples, batch_size, -1)
-                )
-                loglikelihood = torch.mean(
-                    torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0) - math.log(self.num_mc_samples)
-                )
-                loss = -loglikelihood
-
+        log_prob = -F.cross_entropy(logit_sample, target, reduction="none").view((self.num_mc_samples, batch_size, -1))
+        loglikelihood = torch.mean(torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0) - math.log(self.num_mc_samples))
+        loss = -loglikelihood
         return loss
 
 

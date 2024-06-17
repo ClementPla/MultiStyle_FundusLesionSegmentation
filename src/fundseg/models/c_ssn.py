@@ -19,7 +19,7 @@ class CSNNStyleModel(BaseModel):
         arch="unet",
         encoder="resnet34",
         pretrained=True,
-        optimizer="adamw",
+        optimizer="rmsprop",
         num_styles=5,
         epsilon=1e-5,
         rank: int = 10,
@@ -43,7 +43,7 @@ class CSNNStyleModel(BaseModel):
         self.number_styles = num_styles
         self.mean_l = nn.Conv2d(16, n_classes, kernel_size=1)
         self.log_cov_diag_l = nn.Conv2d(16, n_classes, kernel_size=1)
-        self.cov_factor_l = nn.Conv2d(16, n_classes, kernel_size=1)
+        self.cov_factor_l = nn.Conv2d(16, n_classes * rank, kernel_size=1)
         self.style_encoder = nn.Conv2d(5, 16, kernel_size=1)
         self.end_encoder = nn.Conv2d(16 * 2, 16, kernel_size=1)
         self.optim = optimizer
@@ -66,13 +66,12 @@ class CSNNStyleModel(BaseModel):
         Source: https://discuss.pytorch.org/t/how-to-tile-a-tensor/13853/3
         Tile means Fliese in Deutsch
         """
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         init_dim = a.size(dim)
         repeat_idx = [1] * a.dim()
         repeat_idx[dim] = n_tile
         a = a.repeat(*(repeat_idx))
         order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(
-            device
+            self.device
         )
         return torch.index_select(a, dim, order_index)
 
@@ -82,12 +81,13 @@ class CSNNStyleModel(BaseModel):
         # tensor size num_classesxHxW
         event_shape = (self.n_classes,) + logits.shape[2:]
         mean = self.mean_l(logits)
+        b, c, h, w = mean.shape
         cov_diag = self.log_cov_diag_l(logits).exp() + self.epsilon
         mean = mean.view((b, -1))
         cov_diag = cov_diag.view((b, -1))
 
         cov_factor = self.cov_factor_l(logits)
-        cov_factor = cov_factor.view((b, self.rank, self.num_classes, -1))
+        cov_factor = cov_factor.view((b, self.rank, self.n_classes, -1))
         cov_factor = cov_factor.flatten(2, 3)
         cov_factor = cov_factor.transpose(1, 2)
 
@@ -102,7 +102,7 @@ class CSNNStyleModel(BaseModel):
             new_event_shape=event_shape,
             validate_args=False,
         )
-        return logits
+        return mean.view((b, self.n_classes, -1))
 
     def forward(self, x, style):
         logits = self.model(x)
@@ -158,16 +158,17 @@ class CSNNStyleModel(BaseModel):
 
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
+        b, c, h, w = x.shape
         mask = batch["mask"].long()
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
         roi = batch["roi"].unsqueeze(1)
-        logits = self.forward(x, style)
-        loss = self.get_loss(logits, mask)
-        self.log("val_loss", loss, on_epoch=True, on_step=False, sync_dist=True)
-        output = self.get_prob(logits, roi)
+        logits = self.forward_train(x, style)
+        logits = logits.view((b, self.n_classes, h, w))
+        output = self.get_prob(logits, roi).to(self.device)
         self.valid_metrics.update(output, mask)
+
         return output
 
     @torch.inference_mode()
@@ -175,19 +176,28 @@ class CSNNStyleModel(BaseModel):
         self.eval()
         batch = self.transfer_batch_to_device(batch, self.device, 0)
         x = batch["image"]
+        b, c, h, w = x.shape
         roi = batch["roi"].unsqueeze(1)
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
-        logits = self.forward(x, style)
+        logits = self.forward_train(x, style)
+        logits = logits.view((b, self.n_classes, h, w))
         output = self.get_prob(logits, roi)
         return output
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         x = batch["image"]
+        b, c, h, w = x.shape
         roi = batch["roi"].unsqueeze(1)
         y = batch["mask"].long()
-        output = self(x)
+        style = batch["tag"]
+        style = batch_dataset_to_integer(style)
+        style = torch.tensor(style, device=self.device)
+
+        logits = self.forward_train(x, style)
+        logits = logits.view((b, self.n_classes, h, w))
+        
         prob = self.get_prob(output, roi)
         self.test_metrics[dataloader_idx].update(prob, y)
 
@@ -199,6 +209,8 @@ class CSNNStyleModel(BaseModel):
             optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay, eps=1e-8)
         elif self.optim == "sgd":
             optimizer = SGD(params, lr=self.lr, momentum=0.9, weight_decay=self.weight_decay)
+        elif self.optim == "rmsprop":
+            optimizer = torch.optim.RMSprop(params, lr=self.lr, weight_decay=self.weight_decay, alpha=0.9, momentum=0.6)
         else:
             raise ValueError(f"Invalid optimizer {self.optim}")
 
