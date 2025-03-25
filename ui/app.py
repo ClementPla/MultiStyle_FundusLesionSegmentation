@@ -19,18 +19,6 @@ from fundseg.models.smp_model import SMPModel
 from fundseg.utils.colors import COLORS
 
 st.set_page_config(layout="wide", page_title="Fundus Lesions Segmentation", page_icon=":eye:")
-# Set dark theme by default
-st.markdown(
-    """
-    <style>
-    .reportview-container {
-        background: #1a1a1a;
-        color: white;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 
 def load_uploaded_file(uploaded_file):
@@ -40,10 +28,10 @@ def load_uploaded_file(uploaded_file):
     return img, roi
 
 
-def convert_to_tensor(img, roi):
+def convert_to_tensor(img, roi, device="cuda"):
     img = A.Normalize()(image=img)["image"]
-    roi = torch.tensor(roi).unsqueeze(0).float().cuda()
-    return torch.tensor(img).permute(2, 0, 1).unsqueeze(0).float().cuda(), roi
+    roi = torch.tensor(roi).unsqueeze(0).float().to(device)
+    return torch.tensor(img).permute(2, 0, 1).unsqueeze(0).float().to(device), roi
 
 
 def preprocess_image(img):
@@ -51,15 +39,16 @@ def preprocess_image(img):
 
 
 @st.cache_resource
-def load_model(model_name):
-    model = SMPModel.from_pretrained(f"ClementP/MultiStyle_FundusLesionSegmentation", revision=model_name).cuda()
+def load_model(model_name, device="cuda"):
+    model = SMPModel.from_pretrained(f"ClementP/MultiStyle_FundusLesionSegmentation", revision=model_name)
+    model = model.to(device)
     model.eval()
     return model
 
 
 @st.cache_resource
-def load_probe_model(_model):
-    encoder = ModelFeaturesExtractor(_model, position=5, feature_type="encoder").cuda()
+def load_probe_model(_model, device="cuda"):
+    encoder = ModelFeaturesExtractor(_model, position=5, feature_type="encoder").to(device)
     model = ProbeModule.from_pretrained(
         "ClementP/MultiStyle_FundusLesionSegmentation",
         revision="probe",
@@ -67,7 +56,8 @@ def load_probe_model(_model):
         weights=torch.ones(5),
         as_regression=False,
         n_classes=5,
-    ).cuda()
+    )
+    model = model.to(device)
 
     model.eval()
     return model, model.criterion
@@ -105,6 +95,7 @@ def segment_image_with_style_adaptation(
         targeted=True,
     )
     new_img = source_input * (1 - alpha) + alpha * target_input
+    new_img[:, :, ~_roi.bool().squeeze()] = new_img.min()
     batch = dict(image=new_img, roi=_roi)
 
     img = new_img.squeeze().permute(1, 2, 0).detach().cpu().numpy()
@@ -135,15 +126,31 @@ def plot_mask(segmentation, fig):
 
 
 def app():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    introduction = st.expander("Introduction", icon=":material/info:")
+    with introduction:
+        st.write(
+            "This app allows you to segment fundus images using a pre-trained model. \
+            Four classes are available: Exudates, Microaneurysms, Hemorrhages, and Soft Exudates. \
+            We propose different weights, depending on the training dataset used, to segment the images."
+        )
+        st.write(
+            "We illustrate the notion of label adaptation using adversarial attacks \
+            to fit different styles of segmentation. \n In addition, we provide a style conversion \
+            tool to convert the segmentation style of a fundus image from one dataset to another. \
+            The style conversion tool uses a probe model to adapt the style of the segmentation. \
+            The model itself is never modified."
+        )
+    st.sidebar.title("Configuration")
+
     uploaded_file = st.sidebar.file_uploader(
         "Upload a fundus image", type=["png", "jpg", "jpeg"], accept_multiple_files=False
     )
 
     style_conversion = st.sidebar.checkbox("Style conversion", value=False)
-    st.sidebar.subheader("Model")
     if not style_conversion:
-        st.sidebar.write("Choose a model to use for the segmentation")
-        model_name = st.sidebar.selectbox("Model", ["IDRID", "FGADR", "RETLES", "MESSIDOR", "DDR", "ALL"])
+        model_name = st.sidebar.selectbox("Checkpoints", ["IDRID", "FGADR", "RETLES", "MESSIDOR", "DDR", "ALL"])
 
     if style_conversion:
         st.sidebar.subheader("Segmentation style")
@@ -163,16 +170,16 @@ def app():
 
     if uploaded_file is not None:
         filename = uploaded_file.name
-        model = load_model(model_name)
+        model = load_model(model_name, device)
         img, roi = load_uploaded_file(uploaded_file)
         alpha = st.slider("Alpha", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
         col1, col3 = st.columns([1, 1])
         with col1:
             plot_image(img)
 
-        tensor_img, tensor_roi = convert_to_tensor(img, roi)
+        tensor_img, tensor_roi = convert_to_tensor(img, roi, device)
         if style_conversion:
-            probe, loss = load_probe_model(model)
+            probe, loss = load_probe_model(model, device)
             pred_map, img = segment_image_with_style_adaptation(
                 model,
                 probe,
