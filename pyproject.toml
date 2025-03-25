@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
 authors = ["Clement Playout"]
 readme = "README.md"
-packages = [{include = "*", from="src"}]
+packages = [{include = ["adptSeg", "fundseg"], from="src"}]
+
+[project]
+name = "AdaptiveFundusSegmentation"
+version = "0.1.0"
 
 [tool.poetry.dependencies]
 python  = "^3.10"
