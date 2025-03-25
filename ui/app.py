@@ -128,7 +128,6 @@ def plot_mask(segmentation, fig):
 def app():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     resolution = 1024
-    device = torch.device("cpu")
 
     if device.type == "cpu":
         resolution = 416
