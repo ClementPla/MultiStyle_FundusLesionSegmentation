@@ -3,6 +3,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torchmetrics
+from huggingface_hub import PyTorchModelHubMixin
 from pytorch_lightning import LightningModule, seed_everything
 from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.utilities.types import STEP_OUTPUT
@@ -65,7 +66,7 @@ class WeightedCategoricalMSE(nn.Module):
             return torch.mean((x - y.float()) ** 2)
 
 
-class ProbeModule(LightningModule):
+class ProbeModule(LightningModule, PyTorchModelHubMixin):
     def __init__(
         self, featureExtractor, lr=0.005, n_classes=5, weight_decay=0.00001, weights=None, as_regression=False
     ) -> None:

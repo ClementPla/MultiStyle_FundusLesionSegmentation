@@ -25,6 +25,7 @@ fundus-data-toolkit =  {git="https://github.com/ClementPla/fundus-data-toolkit"}
 wandb = "^0.19"
 attrs  = "^25"
 torchseg  = "^0"
+kornia = "^0.7"
 
 [build-system]
 requires = ["setuptools>=64.0"]

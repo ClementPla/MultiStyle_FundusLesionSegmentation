@@ -5,15 +5,15 @@ import warnings
 
 import torch
 from dotenv import load_dotenv
-from fundseg.data import ALL_DATASETS
-from fundseg.data.data_factory import get_datamodule_from_config
-from fundseg.models import get_model
-from fundseg.utils.hf_api import get_modelcard
 from huggingface_hub import HfApi
 from nntools.utils import Config
 from pytorch_lightning import seed_everything
 
 import wandb
+from fundseg.data import ALL_DATASETS
+from fundseg.data.data_factory import get_datamodule_from_config
+from fundseg.models import get_model
+from fundseg.utils.hf_api import get_modelcard
 
 warnings.filterwarnings("ignore")
 
@@ -41,7 +41,7 @@ def upload(architecture, config):
 
     for r in runs:
         tags = r.tags
-        
+
         checkpoint_path = f"checkpoints/{project_name}/{r.name}/"
         all_ckpts = os.listdir(checkpoint_path)
         best_model = next(_ for _ in all_ckpts if "epoch" in _)
@@ -54,7 +54,7 @@ def upload(architecture, config):
             branch_name = "main"
         hfapi.create_branch(
             f"ClementP/fundus-lesions-segmentation-{architecture}", branch=branch_name, token=HF_TOKEN, exist_ok=True
-        )        
+        )
         model.push_to_hub(f"ClementP/fundus-lesions-segmentation-{architecture}", branch=branch_name, token=HF_TOKEN)
 
         model_card = get_modelcard(run=r, arch=architecture)

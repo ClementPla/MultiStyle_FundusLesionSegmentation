@@ -58,8 +58,8 @@ class PGD:
                 l2 = self.loss_func(pred, target[1])
                 # l1 = l1/l1.item()
                 # l2 = l2/l2.item()
-                l1 = torch.sigmoid(l1)
-                l2 = torch.sigmoid(l2)
+                # l1 = torch.sigmoid(l1)
+                # l2 = torch.sigmoid(l2)
 
                 output = l1 * (1 - interpolation) + l2 * interpolation
         else:
