@@ -3,6 +3,7 @@ name = "AdaptiveFundusSegmentation"
 version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
 dependencies = [
+    "python>=3.9",
     "numpy",
     "opencv-python-headless",
     "pandas",
