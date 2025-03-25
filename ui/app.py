@@ -1,10 +1,11 @@
 import albumentations as A
+import cv2
 import numpy as np
 import PIL
 import streamlit as st
 import torch
 from fundus_data_toolkit.functional import autofit_fundus_resolution
-import cv2
+
 from adptSeg.adaptation.adversarial import PGD
 from adptSeg.adaptation.const import _all_datasets, map_dataset_to_integer
 from adptSeg.adaptation.utils import get_probe_model_and_loss
