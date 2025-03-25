@@ -1,9 +1,18 @@
+[tool.poetry]
+name = "AdaptiveFundusSegmentation"
+version = "0.1.0"
+description = "Adaptive-style for lesions segmentation in fundus"
+authors=["Clement Playout"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
 [project]
 name = "AdaptiveFundusSegmentation"
 version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
+
 dependencies = [
-    "python>=3.9",
     "numpy",
     "opencv-python-headless",
     "pandas",
@@ -46,3 +55,4 @@ line-length = 120
 select = ["E", "F", "I", "RUF", "TCH"]
 fixable = ["I", "RUF100", "TCH"]
 fix = true
+
