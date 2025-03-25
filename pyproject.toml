@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
 authors = ["Clement Playout"]
 readme = "README.md"
-packages = [{include = ["adptSeg", "fundseg"], from="src"}]
+packages = [{include = "fundseg", from="src"}, {include = "adptSeg", from="src"}]
 
 [project]
 name = "AdaptiveFundusSegmentation"
