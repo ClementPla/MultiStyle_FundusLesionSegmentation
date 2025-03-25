@@ -22,8 +22,6 @@ wandb = "^0.19"
 attrs  = "^25"
 torchseg  = "^0"
 
-notebook = ["ipykernel", "matplotlib"]
-
 [build-system]
 requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
