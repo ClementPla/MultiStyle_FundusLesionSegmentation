@@ -41,7 +41,7 @@ Modifying an image by adversarial attacks to move from RETINAL LESIONS to IDRiD 
 
 Visualization of the values added by gradient attack.
 <p align="center">
-    <img src="imgs/diff_adversarial.gif" width="800px"/>
+    <img src="imgs/compressed_diff_adversarial.gif" width="800px"/>
 </p>
 ---
 title: FundusMultiStyleLesionsSegment
