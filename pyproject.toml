@@ -2,7 +2,7 @@
 name = "AdaptiveFundusSegmentation"
 version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
-authors=["Clement Playout"]
+authors = ["Clement Playout"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
