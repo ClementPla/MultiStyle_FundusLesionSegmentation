@@ -4,11 +4,6 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
-from adptSeg.adaptation.const import batch_dataset_to_integer
-from adptSeg.adaptation.model_wrapper import FeatureType, ModelFeaturesExtractor
-from adptSeg.adaptation.probe import ProbeModule
-from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
-from fundseg.utils.checkpoints import load_model_from_checkpoints
 from nntools.utils import Config
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
@@ -16,6 +11,11 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.utilities import rank_zero_only
 
 import wandb
+from adptSeg.adaptation.const import batch_dataset_to_integer
+from adptSeg.adaptation.model_wrapper import FeatureType, ModelFeaturesExtractor
+from adptSeg.adaptation.probe import ProbeModule
+from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
+from fundseg.utils.checkpoints import load_model_from_checkpoints
 
 
 @rank_zero_only
@@ -26,15 +26,18 @@ def init_wandb(name, hparams):
 def train(feature_type, position):
     config_file = "configs/config.yaml"
     config = Config(config_file)
-    config["data"]["batch_size"] = 64
+    config["data"]["batch_size"] = 24
     config["data"]["eval_batch_size"] = 16
     config["data"]["random_crop"] = None
+    config["data"]["precise_autocrop"] = False
     # config["data"]["use_cache"] = True
-    model_name = "unet_seresnext50_32x4d"
+    model_name = "unet-se_resnet50"
 
     datasets = ALL_DATASETS
 
-    model = load_model_from_checkpoints(train_datasets=datasets)
+    model = load_model_from_checkpoints(
+        project_name="Retinal Lesions Segmentation", train_datasets=datasets, filters={"model_name": "unet-se_resnet50"}
+    )
 
     fundus_datamodule = get_datamodule_from_config(
         config["datasets"], training_datasets=datasets, dataset_args=config["data"], separate_test_test=False
@@ -44,10 +47,10 @@ def train(feature_type, position):
     fundus_datamodule.test.return_tag = True
 
     fundus_datamodule.train.use_cache = True
-    fundus_datamodule.val.use_cache = False
+    fundus_datamodule.val.use_cache = True
     fundus_datamodule.test.use_cache = False
     [c.init_cache() for c in fundus_datamodule.train.cache]
-    # fundus_datamodule.val.init_cache()
+    [c.init_cache() for c in fundus_datamodule.val.cache]
 
     weights = OrderedDict()
     dataset = fundus_datamodule.train
@@ -91,7 +94,7 @@ def train(feature_type, position):
 
     trainer = Trainer(
         accelerator="gpu",
-        devices=[0, 1],
+        devices=[0],
         max_epochs=50,
         callbacks=[
             checkpoint,

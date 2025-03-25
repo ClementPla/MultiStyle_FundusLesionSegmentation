@@ -1,4 +1,7 @@
+from pathlib import Path
 from typing import Union
+
+import torch
 
 from fundseg.data.data_factory import FundusDataset
 
@@ -39,6 +42,10 @@ def batch_dataset_to_integer(datasets: Union[list[FundusDataset], list[str]]) ->
     return [map_dataset_to_integer(d) for d in datasets]
 
 
+def batch_integer_to_dataset(datasets: Union[list[int], torch.Tensor]) -> list[FundusDataset]:
+    return [map_integer_to_dataset(d) for d in datasets]
+
+
 _all_datasets = [
     FundusDataset.IDRID,
     FundusDataset.MESSIDOR,
@@ -46,3 +53,21 @@ _all_datasets = [
     FundusDataset.FGADR,
     FundusDataset.RETLES,
 ]
+
+
+def get_class_mapping(datasets: list[FundusDataset]) -> dict[int, int]:
+    return {map_dataset_to_integer(d): i for i, d in enumerate(datasets)}
+
+
+def trained_probe_path(position: int, encoder=True) -> str:
+    import wandb
+
+    root = Path("/home/clement/Documents/Projets/MultiStyle_FundusLesionSegmentation/checkpoints/probing")
+    api = wandb.Api()
+    runs = api.runs("liv4d-polytechnique/Probing-Lesions-Segmentation-Positions")
+    for run in runs:
+        is_encoder = run.config["feature_type"] == "ENCODER"
+        if run.config["position"] == position and is_encoder == encoder:
+            ckpt_folder = root / run.name
+            ckpt_files = list(ckpt_folder.glob("epoch*"))
+            return str(ckpt_files[0])

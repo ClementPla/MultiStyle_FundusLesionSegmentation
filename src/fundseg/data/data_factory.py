@@ -49,35 +49,29 @@ def get_datamodule(datasets: List[str], training_sets: List[str], dataset_args, 
     for d in datasets:
         match FundusDataset(d):
             case FundusDataset.IDRID:
-                datamodule = IDRiDDataModule_s(
-                    SEG_PATHS.IDRID, precise_autocrop=True, flag=cv2.IMREAD_COLOR, **dataset_args
-                ).setup_all()
+                datamodule = IDRiDDataModule_s(SEG_PATHS.IDRID, flag=cv2.IMREAD_COLOR, **dataset_args).setup_all()
 
             case FundusDataset.FGADR:
                 datamodule = FGADRDataModule_s(
                     SEG_PATHS.FGADR,
-                    precise_autocrop=True,
                     flag=cv2.IMREAD_COLOR,
                     **dataset_args,
                 ).setup_all()
             case FundusDataset.MESSIDOR:
                 datamodule = MESSIDORDataModule_s(
                     SEG_PATHS.MESSIDOR,
-                    precise_autocrop=True,
                     flag=cv2.IMREAD_COLOR,
                     **dataset_args,
                 ).setup_all()
             case FundusDataset.DDR:
                 datamodule = DDRDataModule_s(
                     SEG_PATHS.DDR,
-                    precise_autocrop=True,
                     flag=cv2.IMREAD_COLOR,
                     **dataset_args,
                 ).setup_all()
             case FundusDataset.RETLES:
                 datamodule = RETLESDataModule_s(
                     SEG_PATHS.RETLES,
-                    precise_autocrop=True,
                     flag=cv2.IMREAD_COLOR,
                     **dataset_args,
                 ).setup_all()

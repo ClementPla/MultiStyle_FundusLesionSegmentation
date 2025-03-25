@@ -1,28 +1,32 @@
-import nntools.dataset as D
-import numpy as np
-import pandas as pd
-import torch
+from copy import deepcopy
 
-# from captum.robust import PGD
-from fundseg.data.datamodule import FundusSegmentationDatamodule
-from fundseg.models.smp_model import SMPModel
-from fundseg.utils.runs import ALL_DATASETS, models_path
+import torch
 from nntools.utils import Config
 
 from adptSeg.adaptation.const import _all_datasets, trained_probe_path
-from adptSeg.adaptation.model_wrapper import ModelEncoder
+from adptSeg.adaptation.model_wrapper import ModelFeaturesExtractor
 from adptSeg.adaptation.probe import ProbeModule
+from fundseg.data.data_factory import ALL_DATASETS
+
+# from captum.robust import PGD
+from fundseg.utils.checkpoints import load_model_from_checkpoints
 
 
 def get_probe_model_and_loss(
-    model_type=ALL_DATASETS, probe_type=5, n_classes=5, as_regression=False, probe_datasets=_all_datasets
+    model_type=ALL_DATASETS,
+    probe_type=5,
+    n_classes=5,
+    as_regression=False,
+    probe_datasets=_all_datasets,
+    feature_type="encoder",
 ):
-    model = SMPModel.load_from_checkpoint(models_path[model_type]).cuda()
-    probe_position = 5
-    encoder = ModelEncoder(model, encoding_position=probe_position).cuda()
+    model = load_model_from_checkpoints(
+        train_datasets=model_type,
+    ).cuda()
+    encoder = ModelFeaturesExtractor(model, position=probe_type, feature_type=feature_type).cuda()
     probe = ProbeModule.load_from_checkpoint(
-        trained_probe_path[probe_type],
-        encoder=encoder,
+        trained_probe_path(probe_type, encoder=feature_type == "encoder"),
+        featureExtractor=deepcopy(encoder),
         weights=torch.ones(n_classes),
         as_regression=as_regression,
         n_classes=n_classes,
@@ -32,30 +36,15 @@ def get_probe_model_and_loss(
     return probe, model, loss
 
 
-def model_from_checkpoint(dataset):
-    model = SMPModel.load_from_checkpoint(models_path[dataset]).cuda()
-    return model
-
-
 def get_aptos_dataloader(batch_size, grade_filter=None):
     config = Config("configs/config.yaml")
-    config_data = Config("configs/data_config.yaml")
-    datamodule = FundusSegmentationDatamodule(config_data, **config["data"])
-    datamodule.persistent_workers = True
-    aptos_path = "/home/tmp/clpla/data/aptos/train/images/"
-    if grade_filter:
-        grade_dataset = pd.read_csv("/home/tmp/clpla/data/aptos/train.csv")
-        dataset = D.ClassificationDataset(
-            aptos_path,
-            shape=datamodule.img_size,
-            auto_pad=True,
-            keep_size_ratio=True,
-            label_dataframe=grade_dataset,
-            gt_column="diagnosis",
-            file_column="id_code",
-        )
-        dataset.subset(np.where(dataset.gts["diagnosis"] >= grade_filter))
-        dataloader = datamodule.custom_dataloader(dataset=dataset, batch_size=batch_size, force_shuffle=False)
-    else:
-        dataloader = datamodule.custom_dataloader(aptos_path, batch_size=batch_size, force_shuffle=False)
-    return dataloader
+    config["data"].pop("random_crop", None)
+    config["data"]["batch_size"] = batch_size
+    config["data"]["data_augmentation_type"] = None
+    from fundus_data_toolkit.datamodules import CLASSIF_PATHS
+    from fundus_data_toolkit.datamodules.classification import AptosDataModule
+
+    datamodule = AptosDataModule(data_dir=CLASSIF_PATHS.APTOS, **config["data"])
+
+    datamodule.setup_all()
+    return datamodule.train_dataloader()

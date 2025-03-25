@@ -1,7 +1,7 @@
 ^define: &img_shape [1024, 1024]
 
 logger:
-  project: Conditional-Style-Segmentation-Networks - Exudates
+  project: Retinal Lesions Segmentation
 
 datasets:
   IDRID: /home/clement/Documents/data/IDRID/A. Segmentation/
@@ -15,12 +15,13 @@ data:
   batch_size: 16
   valid_size: 0.15
   ^num_workers: 6
-  ^eval_batch_size: 2
-  use_cache: True
+  ^eval_batch_size: 4
+  use_cache: False
   persistent_workers: True
   cache_option: memory
-  data_augmentation_type: default
+  data_augmentation_type: light
   random_crop: [512, 512]
+  precise_autocrop: True
 
 trainer:
   accumulate_grad_batches: 1

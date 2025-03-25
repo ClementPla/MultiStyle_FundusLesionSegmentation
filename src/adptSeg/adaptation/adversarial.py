@@ -45,9 +45,9 @@ class PGD:
                 x,
             )
 
-    def get_gradients(self, x: torch.Tensor, target: torch.Tensor, 
-                      interpolation: Optional[float] = None, 
-                      as_regression: bool=False):
+    def get_gradients(
+        self, x: torch.Tensor, target: torch.Tensor, interpolation: Optional[float] = None, as_regression: bool = False
+    ):
         pred = self.forward_func(x)
         if interpolation is not None:
             if as_regression:
@@ -66,7 +66,7 @@ class PGD:
             output = self.loss_func(pred, target)
         output = output.unsqueeze(0)
         with torch.autograd.set_grad_enabled(True):
-            grads = torch.autograd.grad(torch.unbind(output), x)
+            grads = torch.autograd.grad(torch.unbind(output), x, allow_unused=True)
         return grads[0]
 
     def perturb(
@@ -77,7 +77,7 @@ class PGD:
         radius: float,
         step_num: int,
         interpolation: Optional[float] = None,
-        as_regression: bool=False,
+        as_regression: bool = False,
         **kwargs,
     ):
         x.requires_grad_(True)
@@ -90,7 +90,7 @@ class PGD:
             target = targets
         elif isinstance(target, int):
             target = torch.tensor([target]).to(x.device).expand(x.shape[0])
-            
+
         perturbed_input = x
         for i in range(step_num):
             gradients = self.get_gradients(perturbed_input, target, interpolation, as_regression=as_regression)

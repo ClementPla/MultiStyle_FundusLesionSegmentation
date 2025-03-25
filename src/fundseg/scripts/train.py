@@ -71,7 +71,6 @@ def main():
         datasets = ALL_DATASETS
     config_file = "configs/config.yaml"
     config = Config(config_file)
-
     config["model"] = {}
     config["model"]["lr"] = float(args.lr)
     config["model"]["optimizer"] = args.optimizer

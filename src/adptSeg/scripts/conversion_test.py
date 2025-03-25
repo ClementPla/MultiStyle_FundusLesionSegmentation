@@ -1,15 +1,19 @@
+from pathlib import Path
 
+import cv2
 import torch
 import tqdm
-from adptSeg.adaptation.adversarial import PGD
-from adptSeg.adaptation.const import _all_datasets, get_class_mapping
-from adptSeg.adaptation.utils import get_aptos_dataloader, get_probe_model_and_loss, model_from_checkpoint
-from fundseg.data.datamodule import ALL_DATASETS, FundusSegmentationDatamodule
-from fundseg.data.utils import Dataset
 from nntools.utils import Config
 from torchmetrics import Accuracy, MetricCollection, Precision, Recall, Specificity
 
 import wandb
+from adptSeg.adaptation.adversarial import PGD
+from adptSeg.adaptation.const import _all_datasets, get_class_mapping
+from adptSeg.adaptation.utils import get_aptos_dataloader, get_probe_model_and_loss
+from fundseg.data import ALL_CLASSES
+from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
+from fundseg.data.data_factory import FundusDataset as Dataset
+from fundseg.utils.checkpoints import load_model_from_checkpoints
 
 
 def test_ddr_model_trained_on_idrid_retles():
@@ -18,26 +22,28 @@ def test_ddr_model_trained_on_idrid_retles():
     signed_gradient = True
     radius = 0.015
     batch_size = 16
-    
+
     config_file = "configs/config.yaml"
     config = Config(config_file)
-    config['data']['batch_size'] = batch_size
+    config["data"]["batch_size"] = batch_size
     config_data = Config("configs/data_config.yaml")
-    
-    fundus_datamodule = FundusSegmentationDatamodule(data_config=config_data, **config["data"]
-    )
-    fundus_datamodule.setup('test')
+
+    fundus_datamodule = get_datamodule_from_config(config)
+    fundus_datamodule.setup("test")
     dataloaders = fundus_datamodule.test_dataloader()
     for dataloader in dataloaders:
         if dataloader.dataset.id == Dataset.FGADR:
             break
-    probe, model, loss = get_probe_model_and_loss(model_type = Dataset.IDRID | Dataset.RETINAL_LESIONS, 
-                                                  probe_type = Dataset.IDRID | Dataset.RETINAL_LESIONS,
-                                                  n_classes=2, as_regression=False, 
-                                                  probe_datasets=[Dataset.IDRID, Dataset.RETINAL_LESIONS])
+    probe, model, loss = get_probe_model_and_loss(
+        model_type=Dataset.IDRID | Dataset.RETLES,
+        probe_type=Dataset.IDRID | Dataset.RETLES,
+        n_classes=2,
+        as_regression=False,
+        probe_datasets=[Dataset.IDRID, Dataset.RETLES],
+    )
     pgd = PGD(forward_func=probe, loss_func=loss, sign_grad=signed_gradient)
     test_metrics = model.test_metrics
-    
+
     wandb.init(
         project="HQ-LQ Style Conversion Test",
         name="Model trained on IDRID and RETLES tested before and after conversion",
@@ -50,10 +56,10 @@ def test_ddr_model_trained_on_idrid_retles():
             "radius": radius,
         },
     )
-    class_mapping = get_class_mapping(datasets=[Dataset.IDRID, Dataset.RETINAL_LESIONS])
-    targets = ['Reference', Dataset.IDRID, Dataset.RETINAL_LESIONS]
+    class_mapping = get_class_mapping(datasets=[Dataset.IDRID, Dataset.RETLES])
+    targets = ["Reference", Dataset.IDRID, Dataset.RETLES]
     for target in targets:
-        if target != 'Reference':
+        if target != "Reference":
             metrics = test_metrics.clone(prefix=f"Converted_to_{target.name}")
             int_target = class_mapping[target.value]
         else:
@@ -62,18 +68,18 @@ def test_ddr_model_trained_on_idrid_retles():
         for batch in tqdm.tqdm(dataloader, total=len(dataloader)):
             x = batch["image"].cuda()
             roi = batch["roi"].cuda()
-            mask = batch["mask"].long().cuda(   )
+            mask = batch["mask"].long().cuda()
             batch_size = x.shape[0]
-            
-            if target != 'Reference':
+
+            if target != "Reference":
                 y = torch.tensor([int_target]).cuda().expand(batch_size)
                 x1 = pgd.perturb(x, target=y, step_size=step_size, step_num=step_num, radius=radius)
-                x = (   x1 + x   ) / 2
+                x = (x1 + x) / 2
             with torch.inference_mode():
                 predicted = model(x)
                 prob = model.get_prob(predicted, roi)
                 metrics.update(prob, mask)
-            
+
         score = model.setup_scores(metrics)
         wandb.log(score)
     wandb.finish()
@@ -94,7 +100,7 @@ def test_conversion_vs_specialized():
 
     dataloader = get_aptos_dataloader(batch_size, grade_filter=2)
     probe, model, loss = get_probe_model_and_loss()
-    
+
     pgd = PGD(forward_func=probe, loss_func=loss, sign_grad=signed_gradient)
     test_metrics = model.test_metrics
 
@@ -113,7 +119,7 @@ def test_conversion_vs_specialized():
     model.eval()
     for target in targets:
         for special_model in targets:
-            specialized_model = model_from_checkpoint(special_model)
+            specialized_model = load_model_from_checkpoints(train_datasets=special_model)
             metrics = test_metrics.clone(prefix=f"ConvertedTo{target.name}ComparedTo{special_model.name}_")
             int_target = class_mapping[target.value]
             for batch in tqdm.tqdm(dataloader, total=len(dataloader)):
@@ -132,6 +138,7 @@ def test_conversion_vs_specialized():
             score = model.setup_scores(metrics)
             wandb.log(score)
     wandb.finish()
+
 
 def _test_aptos_conversion(step_size, step_num, signed_gradient, radius):
     batch_size = 16
@@ -194,6 +201,7 @@ def _test_aptos_conversion(step_size, step_num, signed_gradient, radius):
 
     wandb.finish()
 
+
 def test_aptos_conversion():
     # Original values
     # step_size = 0.005
@@ -206,4 +214,39 @@ def test_aptos_conversion():
         radius = max_step
         _test_aptos_conversion(step_size, step_num, signed_gradient, radius)
 
-    
+
+@torch.inference_mode()
+def inference_and_save_aptos(savepath):
+    from pynotate.project import Project
+
+    savepath = Path(savepath)
+
+    batch_size = 32
+    dataloader = get_aptos_dataloader(batch_size)
+    model = load_model_from_checkpoints(train_datasets=Dataset.IDRID)
+    dataloader.dataset.return_indices = True
+    with Project(
+        "Aptos Segmentation - IDRiD",
+        input_dir=savepath / "Aptos",
+        output_dir=savepath,
+        segmentation_classes=[c.name for c in ALL_CLASSES],
+        is_segmentation=True,
+    ) as project:
+        for batch in tqdm.tqdm(dataloader, total=len(dataloader)):
+            x = batch["image"].cuda()
+            y = batch["index"]
+            filenames = dataloader.dataset.filename(y)
+            pred = model(x).argmax(dim=1)
+            for i, filename in enumerate(filenames):
+                image = x[i].cpu().numpy().transpose(1, 2, 0)
+                masks = [(pred[i] == (j + 1)).cpu().numpy().astype("uint8") * 255 for j in range(len(ALL_CLASSES))]
+                project.load_image(
+                    segmentation_masks=masks,
+                    image=image,
+                    normalize=True,
+                    filename=filename,
+                )
+
+
+if __name__ == "__main__":
+    inference_and_save_aptos("/home/clement/Documents/Results/")

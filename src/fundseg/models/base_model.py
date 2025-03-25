@@ -53,35 +53,54 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
                 ),
             }
         )
+        self.single_test_metrics = torchmetrics.MetricCollection(
+            {
+                "AUC Precision Recall": AUCPrecisionRecallCurve(
+                    task=self.task,
+                    num_classes=self.n_classes,
+                    num_labels=self.n_classes,
+                    validate_args=False,
+                    thresholds=11,
+                ),
+                "mIoU": torchmetrics.JaccardIndex(
+                    task=self.task,
+                    num_labels=self.n_classes,
+                    num_classes=self.n_classes,
+                    average="macro",
+                ),
+            },
+        )
+        try:
+            self.test_dataloader_ids = [t.replace("_test", "").replace("_split_1", "") for t in test_dataset_id]
+            test_metrics = []
 
-        self.test_dataloader_ids = [t.replace("_test", "").replace("_split_1", "") for t in test_dataset_id]
-        test_metrics = []
-
-        for test_id in self.test_dataloader_ids:
-            print(f"Test dataset: {test_id}")
-            test_metrics.append(
-                torchmetrics.MetricCollection(
-                    {
-                        "AUC Precision Recall": AUCPrecisionRecallCurve(
-                            task=self.task,
-                            num_classes=self.n_classes,
-                            num_labels=self.n_classes,
-                            validate_args=False,
-                            thresholds=11,
-                        ),
-                        "mIoU": torchmetrics.JaccardIndex(
-                            task=self.task,
-                            num_labels=self.n_classes,
-                            num_classes=self.n_classes,
-                            average="macro",
-                        ),
-                    },
-                    postfix=f" - {test_id}",
+            for test_id in self.test_dataloader_ids:
+                print(f"Test dataset: {test_id}")
+                test_metrics.append(
+                    torchmetrics.MetricCollection(
+                        {
+                            "AUC Precision Recall": AUCPrecisionRecallCurve(
+                                task=self.task,
+                                num_classes=self.n_classes,
+                                num_labels=self.n_classes,
+                                validate_args=False,
+                                thresholds=11,
+                            ),
+                            "mIoU": torchmetrics.JaccardIndex(
+                                task=self.task,
+                                num_labels=self.n_classes,
+                                num_classes=self.n_classes,
+                                average="macro",
+                            ),
+                        },
+                        postfix=f" - {test_id}",
+                    )
                 )
-            )
-        self.test_metrics = nn.ModuleList(test_metrics)
+            self.test_metrics = nn.ModuleList(test_metrics)
 
-        self.current_test_dataloader_idx = 0
+            self.current_test_dataloader_idx = 0
+        except TypeError:
+            print("No test dataset provided")
         self.save_hyperparameters()
 
     def initialize(self):

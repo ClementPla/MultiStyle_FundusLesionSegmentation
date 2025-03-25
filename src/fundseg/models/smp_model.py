@@ -32,11 +32,11 @@ class SMPModel(BaseModel):
         )
         self.optim = optimizer
         self.prepare_dropout(0.2)
-        
+
     @property
     def model_name(self):
         return f"{self.arch}-{self.encoder_name}"
-    
+
     def initialize(self):
         self.model.initialize()
 
@@ -48,25 +48,22 @@ class SMPModel(BaseModel):
 
     def configure_optimizers(self):
         params = self.model.parameters()
-        if self.optim == 'adam':
+        if self.optim == "adam":
             optimizer = Adam(params, lr=self.lr, weight_decay=self.weight_decay, eps=1e-8)
-        elif self.optim == 'adamw':
+        elif self.optim == "adamw":
             optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay, eps=1e-8)
-        elif self.optim == 'sgd':
+        elif self.optim == "sgd":
             optimizer = SGD(params, lr=self.lr, momentum=0.9, weight_decay=self.weight_decay)
         else:
-            raise ValueError(f'Invalid optimizer {self.optim}')
-            
-        scheduler = CosineAnnealingLR(
-            optimizer, T_max=self.trainer.estimated_stepping_batches, eta_min=1e-6
-        )
+            raise ValueError(f"Invalid optimizer {self.optim}")
+
+        scheduler = CosineAnnealingLR(optimizer, T_max=self.trainer.estimated_stepping_batches, eta_min=1e-6)
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
-    
-    
+
     def prepare_dropout(self, initial_value=0.0):
         for k, v in list(self.model.named_modules()):
-            if 'drop' in k.split('.'):
+            if "drop" in k.split("."):
                 parent_model = self.model
-                for model_name in k.split('.')[:-1]:
+                for model_name in k.split(".")[:-1]:
                     parent_model = getattr(parent_model, model_name)
-                setattr(parent_model, 'drop', nn.Dropout2d(p=initial_value))
+                setattr(parent_model, "drop", nn.Dropout2d(p=initial_value))

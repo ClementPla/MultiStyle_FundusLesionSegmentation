@@ -197,8 +197,8 @@ class CSNNStyleModel(BaseModel):
 
         logits = self.forward_train(x, style)
         logits = logits.view((b, self.n_classes, h, w))
-        
-        prob = self.get_prob(output, roi)
+
+        prob = self.get_prob(logits, roi)
         self.test_metrics[dataloader_idx].update(prob, y)
 
     def configure_optimizers(self):

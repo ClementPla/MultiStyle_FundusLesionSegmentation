@@ -1,7 +1,7 @@
 from enum import Flag, auto
 
 
-class Lesions(str, Flag):
+class Lesions(Flag):
     COTTON_WOOL_SPOT = auto()
     EXUDATES = auto()
     HEMORRHAGES = auto()
@@ -35,9 +35,4 @@ class Lesions(str, Flag):
         return self.length
 
 
-ALL_CLASSES = [
-    Lesions.COTTON_WOOL_SPOT,
-    Lesions.EXUDATES,
-    Lesions.HEMORRHAGES,
-    Lesions.MICROANEURYSMS,
-]
+ALL_CLASSES = Lesions.COTTON_WOOL_SPOT | Lesions.EXUDATES | Lesions.HEMORRHAGES | Lesions.MICROANEURYSMS
