@@ -21,10 +21,10 @@ from fundseg.utils.colors import COLORS
 st.set_page_config(layout="wide", page_title="Fundus Lesions Segmentation", page_icon=":eye:")
 
 
-def load_uploaded_file(uploaded_file):
+def load_uploaded_file(uploaded_file, resolution):
     # Convert to numpy array
     img = np.array(PIL.Image.open(uploaded_file))
-    img, roi, _ = preprocess_image(img)
+    img, roi, _ = preprocess_image(img, resolution)
     return img, roi
 
 
@@ -34,8 +34,8 @@ def convert_to_tensor(img, roi, device="cuda"):
     return torch.tensor(img).permute(2, 0, 1).unsqueeze(0).float().to(device), roi
 
 
-def preprocess_image(img):
-    return autofit_fundus_resolution(img, 1024, return_roi=True)
+def preprocess_image(img, resolution):
+    return autofit_fundus_resolution(img, resolution, return_roi=True)
 
 
 @st.cache_resource
@@ -127,6 +127,15 @@ def plot_mask(segmentation, fig):
 
 def app():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    resolution = 1024
+    device = torch.device("cpu")
+
+    if device.type == "cpu":
+        resolution = 416
+        st.warning(
+            f"Running on CPU. This may be slow. Resolution reduced to {resolution}x{resolution} "
+            f"(model was trained at 1024x1014)."
+        )
 
     introduction = st.expander("Introduction", icon=":material/info:")
     with introduction:
@@ -137,8 +146,8 @@ def app():
         )
         st.write(
             "We illustrate the notion of label adaptation using adversarial attacks \
-            to fit different styles of segmentation. \n In addition, we provide a style conversion \
-            tool to convert the segmentation style of a fundus image from one dataset to another. \
+            to fit different styles of segmentation. \n \
+            The method converts the segmentation style of a fundus image from one dataset to another. \
             The style conversion tool uses a probe model to adapt the style of the segmentation. \
             The model itself is never modified."
         )
@@ -163,15 +172,16 @@ def app():
         conversion_value = st.sidebar.slider("Interpolation", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
         model_name = "ALL"
 
-        st.sidebar.subheader("Conversion configuration")
-        step_size = st.sidebar.slider("Step size", min_value=0.01, max_value=1.0, value=0.1, step=0.05)
-        step_num = st.sidebar.slider("Step number", min_value=1, max_value=100, value=5, step=5)
-        radius = st.sidebar.slider("Radius", min_value=1, max_value=55, value=5, step=5)
+        configuration = st.sidebar.expander("Conversion settings", expanded=False)
+        with configuration:
+            step_size = st.slider("Step size", min_value=0.01, max_value=1.0, value=0.1, step=0.05)
+            step_num = st.slider("Step number", min_value=1, max_value=100, value=10, step=5)
+            radius = st.slider("Radius", min_value=1, max_value=55, value=5, step=5)
 
     if uploaded_file is not None:
         filename = uploaded_file.name
         model = load_model(model_name, device)
-        img, roi = load_uploaded_file(uploaded_file)
+        img, roi = load_uploaded_file(uploaded_file, resolution=resolution)
         alpha = st.slider("Alpha", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
         col1, col3 = st.columns([1, 1])
         with col1:
