@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "AdaptiveFundusSegmentation"
+version = "0.1.0"
+description = "Adaptive-style for lesions segmentation in fundus"
+authors = ["Clement Playout"]
+readme = "README.md"
+packages = [{include = "fundseg", from="src"}, {include = "adptSeg", from="src"}]
+
+[project]
+name = "AdaptiveFundusSegmentation"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python  = "^3.10"
+albumentations = "^2"
+opencv-python-headless = "^4.0"
+pandas  = "*"
+numpy = "*"
+pydantic ="^2"
+torch ="^2"
+lightning ="^2"
+torchmetrics ="^1.5"
+nntools = { git = "https://github.com/ClementPla/NNTools", branch ="attrs_dataset" }
+fundus-data-toolkit =  {git="https://github.com/ClementPla/fundus-data-toolkit"}
+wandb = "^0.19"
+attrs  = "^25"
+torchseg  = "^0"
+kornia = "^0.7"
+
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 120
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "I", "RUF", "TCH"]
+fixable = ["I", "RUF100", "TCH"]
+fix = true
+

@@ -1,0 +1,36 @@
+^define: &img_shape [1024, 1024]
+
+logger:
+  project: Retinal Lesions Segmentation
+
+datasets:
+  IDRID: /home/clement/Documents/data/IDRID/A. Segmentation/
+  FGADR: /home/clement/Documents/data/FGADR/Seg-set/
+  MESSIDOR: /home/clement/Documents/data/MAPLES-DR/
+  DDR: /home/clement/Documents/data/DDR-dataset/lesion_segmentation/
+  RETLES: /home/clement/Documents/data/retinal-lesions-v20191227/
+
+data:
+  img_size: *img_shape
+  batch_size: 16
+  valid_size: 0.15
+  ^num_workers: 6
+  ^eval_batch_size: 4
+  use_cache: False
+  persistent_workers: True
+  cache_option: memory
+  data_augmentation_type: light
+  random_crop: [512, 512]
+  precise_autocrop: True
+
+trainer:
+  accumulate_grad_batches: 1
+  accelerator: gpu
+  devices: auto
+  max_epochs: 1250
+  early_stopping: True
+  precision: 32
+  check_val_every_n_epoch: 25
+  num_sanity_val_steps: 2
+  log_every_n_steps: 50
+  sync_batchnorm: True
