@@ -32,7 +32,6 @@ test_ddr_model_trained_on_idrid_retles = "adptSeg.scripts.conversion_test:test_d
 dev = ["black", "ruff", "pytest", "pytest-cov", "pre-commit"]
 
 notebook = ["ipykernel", "matplotlib"]
-all = ["drgnet[dev, notebook]"]
 
 [build-system]
 requires = ["setuptools>=64.0"]
@@ -46,6 +45,3 @@ line-length = 120
 select = ["E", "F", "I", "RUF", "TCH"]
 fixable = ["I", "RUF100", "TCH"]
 fix = true
-
-[tool.ruff.isort]
-known-first-party = ["drgnet"]
