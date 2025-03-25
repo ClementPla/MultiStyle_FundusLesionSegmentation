@@ -3,42 +3,24 @@ name = "AdaptiveFundusSegmentation"
 version = "0.1.0"
 description = "Adaptive-style for lesions segmentation in fundus"
 authors = ["Clement Playout"]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-
-[project]
-name = "AdaptiveFundusSegmentation"
-version = "0.1.0"
-description = "Adaptive-style for lesions segmentation in fundus"
-dependencies = [
-    "numpy",
-    "opencv-python-headless",
-    "pandas",
-    "pydantic",
-    "scikit-learn",
-    "torch",
-    "torch-geometric",
-    "lightning",
-    "torchmetrics",
-    "nntools @ git+https://github.com/ClementPla/NNTools@attrs_dataset",
-    "fundus-data-toolkit @ git+https://github.com/ClementPla/fundus-data-toolkit",
-    "wandb",
-    "attrs",
-    "albumentations",
-    "torchseg"
-]
 readme = "README.md"
 
-[project.scripts]
-train = "fundseg.scripts.train:main"
-train_linearprobe = "adptSeg.scripts.linear_probing:main"
-test_aptos_conversion = "adptSeg.scripts.conversion_test:test_aptos_conversion"
-test_conversion_vs_specialized = "adptSeg.scripts.conversion_test:test_conversion_vs_specialized"
-test_ddr_model_trained_on_idrid_retles = "adptSeg.scripts.conversion_test:test_ddr_model_trained_on_idrid_retles"
 
-[project.optional-dependencies]
-dev = ["black", "ruff", "pytest", "pytest-cov", "pre-commit"]
+[tool.poetry.dependencies]
+python  = "^3.10"
+albumentations = "^2"
+opencv-python-headless = "^4.0"
+pandas  = "*"
+numpy = "*"
+pydantic ="^2"
+torch ="^2"
+lightning ="^2"
+torchmetrics ="^1.5"
+nntools = { git = "https://github.com/ClementPla/NNTools", branch ="attrs_dataset" }
+fundus-data-toolkit =  {git="https://github.com/ClementPla/fundus-data-toolkit "}
+wandb = "^0.19"
+attrs  = "^25"
+torchseg  = "^0"
 
 notebook = ["ipykernel", "matplotlib"]
 
