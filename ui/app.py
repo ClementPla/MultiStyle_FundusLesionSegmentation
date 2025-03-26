@@ -69,44 +69,81 @@ def segment_image(model, img, roi):
     return model.inference_step(batch)
 
 
+class UnNormalize(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor):
+        """
+        Args:
+            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
+        Returns:
+            Tensor: Normalized image.
+        """
+        for t, m, s in zip(tensor, self.mean, self.std):
+            t.mul_(s).add_(m)
+            # The normalize code -> t.sub_(m).div_(s)
+        return tensor
+
+
 @st.cache_data
 def segment_image_with_style_adaptation(
-    _model, _probe, _loss, _img, _roi, source, target, alpha, img_name, radius=10, step_size=0.5, step_num=50
+    _model,
+    _probe,
+    _loss,
+    _img,
+    _roi,
+    source,
+    target,
+    img_name,
+    interpolation,
+    radius=10,
+    step_size=0.5,
+    step_num=50,
+    interpolation_mode="Loss",
 ):
-    pgd = PGD(forward_func=_probe, loss_func=_loss, sign_grad=True)
+    xmin = _img.reshape(_img.shape[0], -1).min(1, keepdim=True)[0].view(_img.shape[0], 1, 1, 1)
+    xmax = _img.reshape(_img.shape[0], -1).max(1, keepdim=True)[0].view(_img.shape[0], 1, 1, 1)
+    pgd = PGD(forward_func=_probe, loss_func=_loss, sign_grad=True, lower_bound=xmin, upper_bound=xmax)
     target = map_dataset_to_integer(FundusDataset(target))
     source = map_dataset_to_integer(FundusDataset(source))
 
-    source_input = pgd.perturb(
+    labels = [source, target]
+    perturbed_img = pgd.perturb(
         _img,
-        target=source,
+        labels,
         step_size=step_size,
+        radius=radius / 255.0,
         step_num=step_num,
-        radius=radius / 255,
-        targeted=True,
+        interpolation=interpolation,
+        interpolation_mode=interpolation_mode.lower(),
+        as_regression=False,
     )
+    new_img = perturbed_img.detach()
 
-    target_input = pgd.perturb(
-        _img,
-        target=target,
-        step_size=step_size,
-        step_num=step_num,
-        radius=radius / 255,
-        targeted=True,
-    )
-    new_img = source_input * (1 - alpha) + alpha * target_input
-    new_img[:, :, ~_roi.bool().squeeze()] = new_img.min()
     batch = dict(image=new_img, roi=_roi)
+    unorm = UnNormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
-    img = new_img.squeeze().permute(1, 2, 0).detach().cpu().numpy()
-    # Normalize the image to [0, 1]
-    img = (img - img.min()) / (img.max() - img.min())
-    img = (img * 255).astype(np.uint8)
+    img = unorm(new_img).cpu().squeeze().permute(1, 2, 0).numpy()
+    img = np.clip(img * 255.0, 0, 255).astype(np.uint8)
     return _model.inference_step(batch), img
 
 
 def plot_image(img):
     st.image(img, use_container_width=True)
+
+
+def colorize_multiselect_options(selected) -> None:
+    rules = ""
+    n_colors = len(selected)
+
+    for i, label in enumerate(selected):
+        index = ALL_CLASSES.index(label)
+        color = COLORS[1:][index]
+        rules += f""".stMultiSelect div[data-baseweb="select"] span[data-baseweb="tag"]:nth-child({-n_colors}n+{i + 1}){{background-color: {color};}}"""
+
+    st.markdown(f"<style>{rules}</style>", unsafe_allow_html=True)
 
 
 def plot_mask(segmentation, fig):
@@ -133,7 +170,7 @@ def app():
         resolution = 416
         st.warning(
             f"Running on CPU. This may be slow. Resolution reduced to {resolution}x{resolution} "
-            f"(model was trained at 1024x1014)."
+            f"(model was trained at 1024x1014, expect over segmentation)."
         )
 
     introduction = st.expander("Introduction", icon=":material/info:")
@@ -150,6 +187,9 @@ def app():
             The style conversion tool uses a probe model to adapt the style of the segmentation. \
             The model itself is never modified."
         )
+
+    selectedLabels = st.multiselect("Labels", ALL_CLASSES, default=ALL_CLASSES, format_func=lambda x: x.name)
+    colorize_multiselect_options(selectedLabels)
     st.sidebar.title("Configuration")
 
     uploaded_file = st.sidebar.file_uploader(
@@ -168,21 +208,26 @@ def app():
         target = st.sidebar.radio(
             "Target", ["IDRID", "FGADR", "RETLES", "MESSIDOR", "DDR"], horizontal=True, key="target"
         )
-        conversion_value = st.sidebar.slider("Interpolation", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
+        interpolation = st.sidebar.slider("Interpolation", min_value=0.0, max_value=1.0, value=1.0, step=0.05)
         model_name = "ALL"
 
         configuration = st.sidebar.expander("Conversion settings", expanded=False)
         with configuration:
-            step_size = st.slider("Step size", min_value=0.01, max_value=1.0, value=0.1, step=0.05)
-            step_num = st.slider("Step number", min_value=1, max_value=100, value=10, step=5)
-            radius = st.slider("Radius", min_value=1, max_value=55, value=5, step=5)
+            interpolation_mode = st.radio(
+                "Interpolation mode", ["Input", "Loss"], key="interpolation_mode", horizontal=True
+            )
+            step_size = st.slider("Step size", min_value=0.01, max_value=0.2, value=0.1, step=0.01)
+            step_num = st.slider("Step number", min_value=1, max_value=20, value=5, step=1)
+            radius = st.slider("Radius", min_value=1, max_value=20, value=5, step=1)
 
     if uploaded_file is not None:
         filename = uploaded_file.name
         model = load_model(model_name, device)
         img, roi = load_uploaded_file(uploaded_file, resolution=resolution)
-        alpha = st.slider("Alpha", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
         col1, col3 = st.columns([1, 1])
+
+        alpha = st.slider("Alpha", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
+
         with col1:
             plot_image(img)
 
@@ -195,13 +240,14 @@ def app():
                 loss,
                 tensor_img,
                 tensor_roi,
-                source,
-                target,
-                conversion_value,
-                filename,
-                radius,
-                step_size,
-                step_num,
+                source=source,
+                target=target,
+                interpolation=interpolation,
+                img_name=filename,
+                radius=radius,
+                step_size=step_size,
+                step_num=step_num,
+                interpolation_mode=interpolation_mode,
             )
 
         else:
@@ -210,12 +256,15 @@ def app():
         pred_map = pred_map.squeeze().argmax(0)
         masks = np.zeros((*pred_map.shape, 3), dtype=np.uint8)
         for i in range(1, 5):
+            if ALL_CLASSES[i - 1] not in selectedLabels:
+                continue
             pred_class = (pred_map == i).cpu().numpy()
             hex_color = COLORS[i]
             # Convert hex to RGB
             rgb_color = tuple(int(hex_color[j : j + 2], 16) for j in (1, 3, 5))
             masks[pred_class] = np.asarray(rgb_color)
-
+        bg = ~masks.any(axis=-1)
+        masks[bg] = img[bg]
         img_with_masks = cv2.addWeighted(img, 1 - alpha, masks, alpha, 0)
         with col3:
             st.image(img_with_masks, use_container_width=True)
