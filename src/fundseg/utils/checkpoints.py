@@ -39,6 +39,8 @@ def load_model_from_checkpoints(
         tags = [t.replace("RETINAL_LESIONS", "RETLES") for t in tags]
         if tags == train_datasets:
             print("Found matching run", r.name, "with tags", tags)
+            print("Architecture", r.config["arch"])
+            print("Encoder", r.config["encoder"])
             checkpoint_path = os.path.join(root_directory, f"checkpoints/{project_name}/{r.name}/")
             all_ckpts = os.listdir(checkpoint_path)
             best_model = next(_ for _ in all_ckpts if "epoch" in _)

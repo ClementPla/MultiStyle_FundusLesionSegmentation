@@ -5,6 +5,9 @@ import cv2
 import numpy as np
 import torch
 import tqdm
+from nntools.utils import Config
+from torchvision.utils import make_grid
+
 from adptSeg.adaptation.adversarial import PGD
 from adptSeg.adaptation.const import batch_integer_to_dataset, map_dataset_to_integer
 from adptSeg.utils.checkpoints import load_probe_from_checkpoint
@@ -13,8 +16,6 @@ from fundseg.utils.checkpoints import load_model_from_checkpoints
 
 # from captum.robust import PGD
 from fundseg.utils.colors import COLORS
-from nntools.utils import Config
-from torchvision.utils import make_grid
 
 sys.path.append("src/fundseg/")
 sys.path.append("src/adptSeg/")

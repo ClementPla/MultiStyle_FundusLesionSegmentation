@@ -49,6 +49,7 @@ class LogPredictionSamplesCallback(Callback):
             n = self.n_images
             x = batch["image"][:n].float()
             y = batch["mask"][:n]
+            y = torch.clamp(y, 0, pl_module.n_classes - 1)
             prob = outputs
             pred = pl_module.get_pred(prob)
 

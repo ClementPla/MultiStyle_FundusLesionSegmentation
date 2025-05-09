@@ -1,7 +1,7 @@
 ^define: &img_shape [1024, 1024]
 
 logger:
-  project: Retinal Lesions Segmentation
+  project: Retinal Lesions Segmentation - UNetAFF
 
 datasets:
   IDRID: /home/clement/Documents/data/IDRID/A. Segmentation/
@@ -12,14 +12,14 @@ datasets:
 
 data:
   img_size: *img_shape
-  batch_size: 16
+  batch_size: 64
   valid_size: 0.15
-  ^num_workers: 6
+  ^num_workers: 8
   ^eval_batch_size: 4
   use_cache: False
   persistent_workers: True
-  cache_option: memory
-  data_augmentation_type: light
+  cache_option: duplicated_memory
+  data_augmentation_type: default
   random_crop: [512, 512]
   precise_autocrop: True
 
@@ -27,7 +27,7 @@ trainer:
   accumulate_grad_batches: 1
   accelerator: gpu
   devices: auto
-  max_epochs: 1250
+  max_epochs: 750
   early_stopping: True
   precision: 32
   check_val_every_n_epoch: 25

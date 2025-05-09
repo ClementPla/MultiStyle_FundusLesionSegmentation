@@ -94,7 +94,9 @@ class ProbeModule(LightningModule, PyTorchModelHubMixin):
 
     def forward(self, batch):
         x = self.transfer_batch_to_device(batch, self.device, 0)
-        return self.probe(self.featureExtractor(x))
+        self.featureExtractor.eval()
+        features = self.featureExtractor(x)
+        return self.probe(features)
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         x = batch["image"]

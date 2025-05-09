@@ -1,3 +1,5 @@
+import numpy as np
+from matplotlib.colors import ListedColormap
 from PIL import ImageColor
 
 from fundseg.data.utils import ALL_CLASSES
@@ -22,3 +24,4 @@ PURPLE4 = "#6a1e75"
 COLORS = [TRANSPARENT, TEAL0, TEAL4, PURPLE2, PURPLE4]
 COLORS_RGB = [ImageColor.getrgb(color) for color in COLORS]
 CLASSES_COLORS = {label: color for label, color in zip(["BG", *[_.name for _ in ALL_CLASSES]], COLORS)}
+CMAP = ListedColormap(np.asarray(COLORS_RGB) / 255.0, N=len(COLORS_RGB))

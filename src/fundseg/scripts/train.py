@@ -3,13 +3,14 @@ import logging
 import warnings
 
 import torch
+from nntools.utils import Config
+from pytorch_lightning import Trainer, seed_everything
+
 from fundseg.data.data_factory import ALL_DATASETS, get_datamodule_from_config
 from fundseg.data.utils import ALL_CLASSES
 from fundseg.models import get_model
 from fundseg.utils.callbacks import get_callbacks
 from fundseg.utils.logger import get_wandb_logger
-from nntools.utils import Config
-from pytorch_lightning import Trainer, seed_everything
 
 warnings.filterwarnings("ignore")
 import wandb
@@ -27,7 +28,7 @@ def run_train_test(architecture, config, train_datasets):
 
     tags = train_datasets
 
-    datamodule = get_datamodule_from_config(config['datasets'], train_datasets, config["data"])
+    datamodule = get_datamodule_from_config(config["datasets"], train_datasets, config["data"])
     test_dataset_id = [d.id for d in datamodule.test]
     model = get_model(architecture, **config["model"], test_dataset_id=test_dataset_id)
 
@@ -67,7 +68,7 @@ def main():
     args = parser.parse_args()
 
     datasets = args.dataset
-    if datasets == "all":
+    if datasets == ["all"]:
         datasets = ALL_DATASETS
     config_file = "configs/config.yaml"
     config = Config(config_file)

@@ -3,10 +3,10 @@ import torch
 import torch.distributions as td
 import torch.nn as nn
 import torchseg
-from adptSeg.adaptation.const import batch_dataset_to_integer
 from torch.optim import SGD, Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from adptSeg.adaptation.const import batch_dataset_to_integer
 from fundseg.models.base_model import BaseModel
 from fundseg.models.utils.probs_style import ReshapedDistribution, StochasticSegmentationNetworkLossMCIntegral, TaskMode
 
@@ -50,7 +50,7 @@ class CSNNStyleModel(BaseModel):
         self.epsilon = epsilon
         self.rank = rank
         task_mode = TaskMode.MULTICLASS if n_classes > 2 else TaskMode.BINARY
-        self.loss_function = StochasticSegmentationNetworkLossMCIntegral(num_mc_samples=20, mode=task_mode)
+        self.loss_function = StochasticSegmentationNetworkLossMCIntegral(num_mc_samples=10, mode=task_mode)
         self.distribution = None
 
     @property
@@ -64,7 +64,6 @@ class CSNNStyleModel(BaseModel):
         """
         This function is taken form PyTorch forum and mimics the behavior of tf.tile.
         Source: https://discuss.pytorch.org/t/how-to-tile-a-tensor/13853/3
-        Tile means Fliese in Deutsch
         """
         init_dim = a.size(dim)
         repeat_idx = [1] * a.dim()
@@ -121,13 +120,16 @@ class CSNNStyleModel(BaseModel):
 
     def get_loss(self, logits, mask):
         if self.distribution is None:
-            return torch.tensor(0.0)
+            loss = torch.tensor(0.0)
         else:
-            return self.loss_function(logits, mask, self.distribution)
+            loss = self.loss_function(logits, mask, self.distribution)
+
+        return loss  # + self.dice_loss(logits, mask.unsqueeze(1))
 
     def training_step(self, batch, batch_idx):
         x = batch["image"]
         mask = batch["mask"].long()
+        mask = torch.clamp(mask, 0, self.n_classes - 1)
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
@@ -145,21 +147,11 @@ class CSNNStyleModel(BaseModel):
         )
         return loss
 
-    def get_prob(self, logits, roi=None):
-        if roi is not None:
-            if roi.ndim == 4:
-                roi.squeeze_(1)
-            for k in range(1, self.n_classes):
-                logits[:, k][roi < 1] = -torch.inf
-        return torch.softmax(logits, 1)
-
-    def get_pred(self, prob):
-        return torch.argmax(prob, 1)
-
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
         b, c, h, w = x.shape
         mask = batch["mask"].long()
+        mask = torch.clamp(mask, 0, self.n_classes - 1)
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
@@ -167,12 +159,13 @@ class CSNNStyleModel(BaseModel):
         logits = self.forward_train(x, style)
         logits = logits.view((b, self.n_classes, h, w))
         output = self.get_prob(logits, roi).to(self.device)
+
         self.valid_metrics.update(output, mask)
 
         return output
 
     @torch.inference_mode()
-    def inference_step(self, batch):
+    def inference_step(self, batch, temperature=1.0):
         self.eval()
         batch = self.transfer_batch_to_device(batch, self.device, 0)
         x = batch["image"]
@@ -181,9 +174,12 @@ class CSNNStyleModel(BaseModel):
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)
-        logits = self.forward_train(x, style)
+        logits = self.forward(x, style)
+        b = logits.shape[0]
+        # tensor size num_classesxHxW
+        logits = self.mean_l(logits)
         logits = logits.view((b, self.n_classes, h, w))
-        output = self.get_prob(logits, roi)
+        output = self.get_prob(logits, roi, temperature)
         return output
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
@@ -191,6 +187,7 @@ class CSNNStyleModel(BaseModel):
         b, c, h, w = x.shape
         roi = batch["roi"].unsqueeze(1)
         y = batch["mask"].long()
+        y = torch.clamp(y, 0, self.n_classes - 1)
         style = batch["tag"]
         style = batch_dataset_to_integer(style)
         style = torch.tensor(style, device=self.device)

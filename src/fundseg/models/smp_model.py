@@ -15,10 +15,11 @@ class SMPModel(BaseModel):
         encoder="resnet34",
         pretrained=True,
         optimizer="adamw",
+        encoder_params={},
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args)
 
         encoder_weights = "imagenet" if pretrained else None
         self.arch = arch
@@ -29,6 +30,7 @@ class SMPModel(BaseModel):
             in_channels=in_chans,
             classes=n_classes,
             encoder_weights=encoder_weights,
+            encoder_params=encoder_params,
         )
         self.optim = optimizer
         self.prepare_dropout(0.2)

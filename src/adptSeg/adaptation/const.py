@@ -68,6 +68,14 @@ def trained_probe_path(position: int, encoder=True) -> str:
     for run in runs:
         is_encoder = run.config["feature_type"] == "ENCODER"
         if run.config["position"] == position and is_encoder == encoder:
+            print(
+                "Found run",
+                run.name,
+                " corresponding to position ",
+                position,
+                " and model ",
+                run.config["model_name"],
+            )
             ckpt_folder = root / run.name
             ckpt_files = list(ckpt_folder.glob("epoch*"))
             return str(ckpt_files[0])

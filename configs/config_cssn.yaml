@@ -5,30 +5,32 @@ logger:
 
 
 datasets:
-  IDRID: /home/tmp/clpla/data/IDRID/A. Segmentation/
-  FGADR: /home/tmp/clpla/data/segmentation/FGADR/Seg-set/
-  MESSIDOR: /home/tmp/clpla/data/segmentation/Maples-DR/
-  DDR: /home/tmp/clpla/data/segmentation/DDR-dataset/lesion_segmentation/
-  RETLES: /home/tmp/clpla/data/segmentation/retinal-lesions-v20191227/
+  IDRID: /home/clement/Documents/data/IDRID/A. Segmentation/
+  FGADR: /home/clement/Documents/data/FGADR/Seg-set/
+  MESSIDOR: /home/clement/Documents/data/MAPLES-DR/
+  DDR: /home/clement/Documents/data/DDR-dataset/lesion_segmentation/
+  RETLES: /home/clement/Documents/data/retinal-lesions-v20191227/
 
 model:
   lr: 0.001
   optimizer: rmsprop
 data:
   img_size: *img_shape
-  batch_size: 8  
+  batch_size: 48  
   valid_size: 0.15
-  ^num_workers: 6
+  ^num_workers: 8
   ^eval_batch_size: 1
   use_cache: True
   persistent_workers: True
-  cache_option: memory
+  cache_option: duplicated_memory
   data_augmentation_type: default
-  random_crop: [384, 384]
+  random_crop: [512, 512]
+  precise_autocrop: True
 
 trainer:
-  accumulate_grad_batches: 8
+  accumulate_grad_batches: 1
   accelerator: gpu
+  devices: auto
   max_epochs: 1250
   early_stopping: True
   precision: 32

@@ -104,8 +104,8 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
         self.save_hyperparameters()
 
     def initialize(self):
-        smp_init.initialize_decoder(self.decoder)
-        smp_init.initialize_head(self.segmentation_head)
+        smp_init.initialize_decoder(self.model.decoder)
+        smp_init.initialize_head(self.model.segmentation_head)
 
     @abstractmethod
     def get_loss(self, logits, mask):
@@ -127,9 +127,12 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         x = batch["image"]
         mask = batch["mask"].long()
+        mask = torch.clamp(mask, 0, self.n_classes - 1)
 
         logits = self(x)
+
         loss = self.get_loss(logits, mask)
+
         loss = torch.nan_to_num(loss)
         self.log(
             "train_loss",
@@ -144,6 +147,7 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
     def validation_step(self, batch, batch_idx):
         x = batch["image"]
         mask = batch["mask"].long()
+        mask = torch.clamp(mask, 0, self.n_classes - 1)
         roi = batch["roi"].unsqueeze(1)
         logits = self(x)
         loss = self.get_loss(logits, mask)
@@ -152,25 +156,25 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
         self.valid_metrics.update(output, mask)
         return output
 
-    def get_prob(self, logits, roi=None):
+    def get_prob(self, logits, roi=None, temperature=1.0):
         if roi is not None:
             if roi.ndim == 4:
                 roi.squeeze_(1)
             for k in range(1, self.n_classes):
                 logits[:, k][roi < 1] = -torch.inf
-        return torch.softmax(logits, 1)
+        return torch.softmax(logits * temperature, 1)
 
     def get_pred(self, prob):
         return torch.argmax(prob, 1)
 
     @torch.inference_mode()
-    def inference_step(self, batch):
+    def inference_step(self, batch, temperature=1):
         self.eval()
         batch = self.transfer_batch_to_device(batch, self.device, 0)
         x = batch["image"]
         roi = batch["roi"].unsqueeze(1)
         logits = self(x)
-        output = self.get_prob(logits, roi)
+        output = self.get_prob(logits, roi, temperature)
         return output
 
     def on_validation_epoch_end(self):
@@ -182,6 +186,7 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
         x = batch["image"]
         roi = batch["roi"].unsqueeze(1)
         y = batch["mask"].long()
+        y = torch.clamp(y, 0, self.n_classes - 1)
         output = self(x)
         prob = self.get_prob(output, roi)
         self.test_metrics[dataloader_idx].update(prob, y)
@@ -240,6 +245,7 @@ class BaseModel(LightningModule, PyTorchModelHubMixin):
 
     def get_grid_with_gt_mask(self, batch, alpha=0.8, colors=None, ncol=8, padding=2, border_alpha=1.0, kernel_size=5):
         gt = batch["mask"].unsqueeze(1).to(self.device).long()
+        gt = torch.clamp(gt, 0, self.n_classes - 1)
         image = batch["image"].to(self.device)
         grid_image = make_grid(image, nrow=ncol, padding=padding, normalize=True, scale_each=True) * 255
         grid_gt = make_grid(gt, nrow=ncol, padding=padding)[0]
