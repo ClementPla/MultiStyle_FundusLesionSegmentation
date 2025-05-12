@@ -26,6 +26,7 @@ wandb = "^0.19"
 attrs  = "^25"
 torchseg  = "^0"
 kornia = "^0.7"
+monai = "1.4.0"
 
 [build-system]
 requires = ["setuptools>=64.0"]
