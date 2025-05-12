@@ -72,12 +72,12 @@ def app():
     introduction = st.expander("Introduction", icon=":material/info:")
     with introduction:
         st.write(
-            "This app allows you to segment fundus images using a pre-trained model. \
-            Four classes are available: Exudates, Microaneurysms, Hemorrhages, and Soft Exudates. \
-            We propose different weights, depending on the training dataset used, to segment the images."
+            "This app allows you to segment lesions in fundus images using different pre-trained models. \
+            Four classes are detected: Exudates, Microaneurysms, Hemorrhages, and Soft Exudates. \
+            We propose different trained weights, based on the training dataset used."
         )
         st.write(
-            "We illustrate the notion of label adaptation using adversarial attacks \
+            "We illustrate the notion of style adaptation using adversarial attacks \
             to fit different styles of segmentation. \n \
             The method converts the segmentation style of a fundus image from one dataset to another. \
             The style conversion tool uses a probe model to adapt the style of the segmentation. \
@@ -115,10 +115,10 @@ def app():
             configuration = st.sidebar.expander("Conversion settings", expanded=False)
             with configuration:
                 step_size = st.slider(
-                    "Step size", min_value=0.001, max_value=0.01, value=0.005, step=0.001, format="%0.3f"
+                    "Step size", min_value=0.001, max_value=0.05, value=0.02, step=0.001, format="%0.3f"
                 )
-                step_num = st.slider("Step number", min_value=1, max_value=100, value=35, step=1)
-                radius = st.slider("Radius", min_value=1, max_value=10, value=5, step=1)
+                step_num = st.slider("Step number", min_value=1, max_value=100, value=15, step=1)
+                radius = st.slider("Radius", min_value=1, max_value=30, value=10, step=1)
     else:
         target = st.sidebar.radio(
             "Target", ["IDRID", "FGADR", "RETLES", "MESSIDOR", "DDR"], horizontal=True, key="target"

@@ -92,14 +92,12 @@ def CSNN_uncertainty(_tensor, _roi, softmax_alpha, image_id):
 
 def generate_hypothesis(model, probe, loss, batch, temperature, target, n=50):
     pgd = PGD(forward_func=probe, loss_func=loss, sign_grad=False)
-    batch = deepcopy(batch)
     img = batch["image"]
-    roi
     img.grad = None
     perturbed_img = pgd.perturb(
         img,
         target,
-        step_size=0.010,
+        step_size=0.02,
         radius=10 / 255.0,
         step_num=25,
         interpolation=None,
@@ -113,7 +111,7 @@ def generate_hypothesis(model, probe, loss, batch, temperature, target, n=50):
         with torch.inference_mode():
             x = perturbed_img * alpha + img * (1 - alpha)
 
-            pred = model.inference_step(dict(image=x, roi=roi), temperature=1.0)
+            pred = model.inference_step(dict(image=x, roi=roi), temperature=temperature)
             out.append(pred)
     return torch.stack(out, dim=0)
 
@@ -154,7 +152,6 @@ def multistyle_uncertainty(_tensor, _roi, softmax_alpha, n, uncertainty_targets,
                 model, probe, loss, batch, softmax_alpha, map_dataset_to_integer(FundusDataset(target)), n=n
             ).squeeze(1)
             hyps.append(hyp)
-
         hyps = torch.cat(hyps, dim=0)
         std_pred = torch.std(hyps[:, 1:].sum(dim=1), dim=0)
 

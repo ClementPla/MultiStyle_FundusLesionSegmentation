@@ -43,8 +43,9 @@ def load_model(model_name, device="cuda", **kwargs):
     return model
 
 
+@st.cache_resource
 def load_probe_model(_model, device="cuda"):
-    position = 4
+    position = 3
     encoder = ModelFeaturesExtractor(_model, position=position, feature_type="encoder").to(device)
     model = ProbeModule.from_pretrained(
         "ClementP/MultiStyle_FundusLesionSegmentation",
@@ -92,7 +93,9 @@ def segment_image_with_style_adaptation(
     step_size=0.5,
     step_num=50,
 ):
-    pgd = PGD(forward_func=_probe, loss_func=_loss, sign_grad=False)
+    _model.eval()
+    pgd = PGD(forward_func=_probe, loss_func=_loss, sign_grad=True)
+
     target = map_dataset_to_integer(FundusDataset(target))
     _img.grad = None
     labels = target
@@ -109,7 +112,8 @@ def segment_image_with_style_adaptation(
     x = perturbed_img * _roi + xmin.unsqueeze(-1).unsqueeze(-1) * (1 - _roi)
     x = x * interpolation + _img * (1 - interpolation)
     with torch.inference_mode():
-        pred = _model.inference_step(dict(image=x, roi=_roi), temperature=1.0)
+        pred = _model.get_prob(_model(x), roi=_roi)
+
         unorm = UnNormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
         img = unorm(x).cpu().squeeze().permute(1, 2, 0).numpy()

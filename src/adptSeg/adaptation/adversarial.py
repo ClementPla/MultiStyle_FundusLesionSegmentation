@@ -49,7 +49,9 @@ class PGD:
         self, x: torch.Tensor, target: torch.Tensor, interpolation: Optional[float] = None, as_regression: bool = False
     ):
         for param in self.forward_func.parameters():
-            param.grad = None
+            if param.grad is not None:
+                param.grad.detach_()
+                param.grad.zero_()
         pred = self.forward_func(x)
 
         if interpolation is not None:
@@ -67,6 +69,7 @@ class PGD:
             output = self.loss_func(pred, target)
 
         output = output.unsqueeze(0)
+
         with torch.autograd.set_grad_enabled(True):
             grads = torch.autograd.grad(torch.unbind(output), x, allow_unused=True)
         return grads[0]
